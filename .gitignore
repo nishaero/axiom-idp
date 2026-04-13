@@ -1,0 +1,82 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.so.*
+*.dylib
+
+# Test binaries
+*.test
+
+# Profiling data
+*.prof
+*.pprof
+
+# Go workspace file
+go.work
+
+# Dependency directory
+vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+*.iml
+
+# Testing
+.coverage
+*.cover
+coverage.out
+coverage.html
+.pytest_cache/
+
+# Node dependencies
+web/node_modules/
+web/.pnpm-store/
+web/dist/
+web/.env.local
+
+# Build outputs
+bin/
+dist/
+*.o
+*.a
+*.so
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+
+# Certificates
+*.pem
+*.key
+*.crt
+*.csr
+
+# Generated files
+*.pb.go
+*.pb.gw.go
+
+# OS specific
+.DS_Store
+Thumbs.db

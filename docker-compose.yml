@@ -1,0 +1,32 @@
+services:
+  axiom:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80"
+    environment:
+      - AXIOM_PORT=8080
+      - AXIOM_ENV=development
+      - AXIOM_LOG_LEVEL=debug
+      - AXIOM_DB_DRIVER=sqlite3
+      - AXIOM_DB_URL=sqlite:///./data/axiom.db
+      - AXIOM_SESSION_SECRET=dev-secret-change-in-production
+    volumes:
+      - axiom-data:/axiom/data
+    networks:
+      - axiom-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+networks:
+  axiom-network:
+    driver: bridge
+
+volumes:
+  axiom-data:

@@ -1,0 +1,139 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: axiom
+
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: axiom-config
+  namespace: axiom
+data:
+  AXIOM_PORT: "8080"
+  AXIOM_ENV: "production"
+  AXIOM_LOG_LEVEL: "info"
+  AXIOM_DB_DRIVER: "postgres"
+
+---
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: axiom-secrets
+  namespace: axiom
+type: Opaque
+stringData:
+  AXIOM_DB_URL: "postgres://axiom:password@postgres:5432/axiom"
+  AXIOM_SESSION_SECRET: "change-me-in-production"
+  AXIOM_OAUTH_CLIENT_SECRET: "oauth-client-secret"
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: axiom-server
+  namespace: axiom
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: axiom-server
+  template:
+    metadata:
+      labels:
+        app: axiom-server
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: axiom-server
+        image: axiom-idp/axiom:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+          name: http
+        envFrom:
+        - configMapRef:
+            name: axiom-config
+        - secretRef:
+            name: axiom-secrets
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: tmp
+        emptyDir: {}
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: axiom-server
+  namespace: axiom
+spec:
+  selector:
+    app: axiom-server
+  type: LoadBalancer
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8080
+
+---
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: axiom-server
+  namespace: axiom
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: axiom-server
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80

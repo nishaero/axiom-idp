@@ -1,0 +1,104 @@
+run:
+  timeout: 5m
+  tests: true
+  allow-serial-runners: false
+
+output:
+  format: colored-line-number
+
+linters-settings:
+  govet:
+    check-shadowing: true
+    check-unreachable: false
+    check-assign: false
+  gocyclo:
+    min-complexity: 15
+  misspell:
+    locale: US
+  unused:
+    check-exported: false
+  unparam:
+    check-exported: true
+  staticcheck:
+    strict: false
+
+linters:
+  enable:
+    - asciicheck
+    - bidichk
+    - bodyclose
+    - decorder
+    - depguard
+    - dogsled
+    - dupl
+    - dupword
+    - durationcheck
+    - errorlint
+    - exhaustive
+    - exportloopref
+    - forbidigo
+    - gochecknoinits
+    - gocognit
+    - gocritic
+    - gocyclo
+    - godox
+    - gofmt
+    - goimports
+    - gomnd
+    - gomodguard
+    - goprintffuncname
+    - gosec
+    - gosimple
+    - govet
+    - ineffassign
+    - interfacebloat
+    - loggercheck
+    - makezero
+    - misspell
+    - nakedret
+    - nestif
+    - nilerr
+    - nilnil
+    - noctx
+    - nolintlint
+    - nonamedreturns
+    - nosprintfhostport
+    - prealloc
+    - predeclared
+    - promlinter
+    - revive
+    - rowserrcheck
+    - sqlclosecheck
+    - staticcheck
+    - stylecheck
+    - tagliatelle
+    - tenv
+    - testableexamples
+    - testpackage
+    - thelper
+    - tparallel
+    - typecheck
+    - unconvert
+    - unchecked
+    - unparam
+    - unreachable
+    - unused
+    - usestdlibvars
+    - varcheck
+    - wastedassign
+    - whitespace
+    - wsl
+
+issues:
+  exclude-use-default: false
+  exclude:
+    - EXC0001
+    - EXC0002
+    - EXC0003
+    - EXC0004
+    - EXC0005
+    - "shadow: declaration of \"err\""
+  exclude-patterns:
+    - ".*_test.go"
+    - ".*_mock.go"
+    - ".*/mocks/.*"

@@ -1,0 +1,19 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  @apply m-0 p-0 box-border;
+}
+
+html {
+  @apply scroll-smooth;
+}
+
+body {
+  @apply bg-white dark:bg-dark-900 text-dark-900 dark:text-white font-sans transition-colors;
+}
+
+#root {
+  @apply min-h-screen;
+}
