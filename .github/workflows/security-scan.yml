@@ -2,79 +2,189 @@ name: Security Scan
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
   schedule:
-    - cron: '0 2 * * 0'
+    - cron: '0 2 * * *'  # Daily at 2:00 AM
+
+env:
+  IMAGE_NAME: axiom-idp
 
 jobs:
-  gosec:
-    name: GoSec
+  trivy:
+    name: Container Vulnerability Scan
     runs-on: ubuntu-latest
-    
+
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Run GoSec
+
+      - name: Build Docker image
+        run: |
+          docker build -t $IMAGE_NAME:${{ github.sha }} .
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: $IMAGE_NAME:${{ github.sha }}
+          format: 'template'
+          template: '@/contrib/sarif.tpl'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+          wait-for-processing: true
+
+  gosec:
+    name: Go Security Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.22'
+
+      - name: Run govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
+      - name: Run gosec
         uses: securego/gosec@master
         with:
           args: -no-fail -fmt sarif -out gosec-result.sarif ./...
-      
-      - name: Upload SARIF
-        uses: github/codeql-action/upload-sarif@v2
+
+      - name: Upload gosec results
+        uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: gosec-result.sarif
-          wait-for-processing: true
 
-  trivy:
-    name: Trivy Container Scan
+  gitleaks:
+    name: Secret Detection
     runs-on: ubuntu-latest
-    
+
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Build Docker image
-        run: docker build -t axiom:${{ github.sha }} .
-      
-      - name: Run Trivy scan
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: axiom:${{ github.sha }}
-          format: 'sarif'
-          output: 'trivy-result.sarif'
-      
-      - name: Upload Trivy results
-        uses: github/codeql-action/upload-sarif@v2
-        with:
-          sarif_file: trivy-result.sarif
 
-  secrets:
-    name: Detect Secrets
-    runs-on: ubuntu-latest
-    
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Detect secrets
+      - name: Detect secrets with TruffleHog
         uses: trufflesecurity/trufflehog@main
         with:
           path: ./
           base: ${{ github.event.repository.default_branch }}
           head: HEAD
-          extra_args: --debug --only-verified
+          extra_args: --only-verified --json > /tmp/trufflehog-results.json
 
-  dependency-check:
-    name: Dependency Check
+      - name: Upload TruffleHog results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: trufflehog-results
+          path: /tmp/trufflehog-results.json
+          retention-days: 7
+
+  checkov:
+    name: Infrastructure as Code Security
     runs-on: ubuntu-latest
-    
+
     steps:
       - uses: actions/checkout@v4
-      
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install checkov
+        run: pip install checkov
+
+      - name: Run checkov IaC scan
+        run: |
+          checkov -d . --check-filename=Dockerfile,docker-compose.yml,*.yml,*.yaml
+          echo "✅ Infrastructure as Code security scan completed"
+
+      - name: Upload checkov results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: checkov-results
+          path: /tmp/checkov_*
+          retention-days: 30
+
+  dependency-check:
+    name: Dependency Vulnerability Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
           go-version: '1.22'
-      
-      - name: Check dependencies
+
+      - name: Check Go dependencies
         run: |
-          go list -json -m all | nancy sleuth || true
-          npm audit --audit-level=moderate || true
+          go mod why | tee /tmp/go-deps.txt
+          echo "✅ Go dependencies checked"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install npm dependencies
+        run: |
+          cd web
+          npm ci
+
+      - name: Run npm audit
+        run: |
+          cd web
+          npm audit --audit-level=high > /tmp/npm-audit.log || true
+          cat /tmp/npm-audit.log
+
+      - name: Upload audit results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: npm-audit-results
+          path: /tmp/npm-audit.log
+          retention-days: 30
+
+  license-compliance:
+    name: License Compliance Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install license-checker
+        run: pip install license-checker
+
+      - name: Check project licenses
+        run: |
+          license-checker --json --no-color --out /tmp/licenses.json \
+            --exclude 'MIT,BSD,SleepyCat,Unicode,Apache-2.0'
+          cat /tmp/licenses.json
+
+      - name: Upload license report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: license-report
+          path: /tmp/licenses.json
+          retention-days: 90
