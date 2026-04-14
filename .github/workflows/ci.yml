@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION: '1.22'
+  GO_VERSION: '1.24.9'
   NODE_VERSION: '20'
 
 jobs:
@@ -60,9 +60,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: web
-        run: |
-          npm ci
-          npm install --no-save jsdom @testing-library/user-event
+        run: npm ci
 
       - name: Remove generated TypeScript artifacts
         run: find web/src -type f \( -name '*.js' -o -name '*.js.map' -o -name '*.d.ts' -o -name '*.d.ts.map' \) -delete
