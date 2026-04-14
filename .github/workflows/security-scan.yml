@@ -32,8 +32,10 @@ jobs:
       - name: Install Trivy
         run: |
           mkdir -p "$HOME/.local/bin"
-          curl -sfL "https://github.com/aquasecurity/trivy/releases/download/v0.65.0/trivy_0.65.0_Linux-64bit.tar.gz" \
-            | tar -xz -C "$HOME/.local/bin" trivy
+          curl -fsSL --retry 5 --retry-delay 2 --retry-all-errors \
+            -o /tmp/trivy.tar.gz \
+            "https://github.com/aquasecurity/trivy/releases/download/v0.65.0/trivy_0.65.0_Linux-64bit.tar.gz"
+          tar -xzf /tmp/trivy.tar.gz -C "$HOME/.local/bin" trivy
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Run Trivy vulnerability scanner
