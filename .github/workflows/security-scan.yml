@@ -31,12 +31,8 @@ jobs:
 
       - name: Install Trivy
         run: |
-          mkdir -p "$HOME/.local/bin"
-          curl -fsSL --retry 5 --retry-delay 2 --retry-all-errors \
-            -o /tmp/trivy.tar.gz \
-            "https://github.com/aquasecurity/trivy/releases/download/v0.65.0/trivy_0.65.0_Linux-64bit.tar.gz"
-          tar -xzf /tmp/trivy.tar.gz -C "$HOME/.local/bin" trivy
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          go install github.com/aquasecurity/trivy/cmd/trivy@v0.69.3
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       - name: Run Trivy vulnerability scanner
         run: |
