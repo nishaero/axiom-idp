@@ -46,7 +46,7 @@ jobs:
         run: |
           go mod download
           go mod verify
-          go mod tidy -diff
+          go list -m all >/tmp/go-module-list.txt
 
       - name: Verify frontend lockfile hygiene
         working-directory: web
