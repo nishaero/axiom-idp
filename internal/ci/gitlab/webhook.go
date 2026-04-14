@@ -15,14 +15,13 @@ import (
 
 // WebhookHandler handles GitLab webhook events
 type WebhookHandler struct {
-	logger     *logrus.Logger
-	client     *GitLabClient
-	secret     string
-	path       string
-	registry   *EventRegistry
-	config     *WebhookConfig
+	logger   *logrus.Logger
+	client   *GitLabClient
+	secret   string
+	path     string
+	registry *EventRegistry
+	config   *WebhookConfig
 }
-
 
 // EventRegistry manages event handlers for webhooks
 type EventRegistry struct {
@@ -49,10 +48,10 @@ func (r *EventRegistry) GetHandlers(eventType string) []func(event *WebhookEvent
 // NewWebhookHandler creates a new GitLab webhook handler
 func NewWebhookHandler(logger *logrus.Logger, client *GitLabClient, secret string, registry *EventRegistry) *WebhookHandler {
 	return &WebhookHandler{
-		logger:         logger,
-		client:         client,
-		secret:         secret,
-		registry:       registry,
+		logger:   logger,
+		client:   client,
+		secret:   secret,
+		registry: registry,
 		config: &WebhookConfig{
 			Path:           "/api/v1/ci/gitlab/webhook",
 			VerifySSL:      true,
@@ -81,9 +80,9 @@ func (h *WebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 
 	// Log request details
 	h.logger.WithFields(logrus.Fields{
-		"method":   r.Method,
-		"path":     r.URL.Path,
-		"event":    r.Header.Get("X-Gitlab-Event"),
+		"method":    r.Method,
+		"path":      r.URL.Path,
+		"event":     r.Header.Get("X-Gitlab-Event"),
 		"timestamp": time.Now().Format(time.RFC3339),
 	}).Debug("Received webhook request")
 
@@ -348,12 +347,12 @@ func getString(raw map[string]interface{}, key string) string {
 // auditLog logs the webhook event for audit purposes
 func (h *WebhookHandler) auditLog(eventType string, event *WebhookEvent) {
 	auditData := map[string]interface{}{
-		"timestamp":   time.Now().UnixNano(),
-		"event_type":  eventType,
-		"project_id":  event.Project.ID,
+		"timestamp":    time.Now().UnixNano(),
+		"event_type":   eventType,
+		"project_id":   event.Project.ID,
 		"project_name": event.Project.Name,
-		"ref":         event.Ref,
-		"event_name":  event.EventName,
+		"ref":          event.Ref,
+		"event_name":   event.EventName,
 	}
 
 	h.logger.WithFields(logrus.Fields{
@@ -446,10 +445,10 @@ func (h *WebhookHandler) GetEventCategory(eventType string) string {
 // PushEventHandler handles push events
 func (h *WebhookHandler) PushEventHandler(event *WebhookEvent) {
 	h.logger.WithFields(logrus.Fields{
-		"project":   event.Project.FullName,
-		"ref":       event.Ref,
-		"commits":   len(event.Commits),
-		"author":    event.Author,
+		"project": event.Project.FullName,
+		"ref":     event.Ref,
+		"commits": len(event.Commits),
+		"author":  event.Author,
 	}).Info("Processing push event")
 
 	// Integration with service discovery for new deployments
@@ -481,11 +480,11 @@ func (h *WebhookHandler) JobEventHandler(event *WebhookEvent) {
 	}
 
 	h.logger.WithFields(logrus.Fields{
-		"job_id":    event.Job.ID,
-		"job_name":  event.Job.Name,
-		"status":    event.Job.Status,
-		"stage":     event.Job.Stage,
-		"duration":  event.Job.Duration,
+		"job_id":   event.Job.ID,
+		"job_name": event.Job.Name,
+		"status":   event.Job.Status,
+		"stage":    event.Job.Stage,
+		"duration": event.Job.Duration,
 	}).Info("Processing job event")
 
 	// Stream job status to CI orchestration
@@ -499,11 +498,11 @@ func (h *WebhookHandler) MergeRequestEventHandler(event *WebhookEvent) {
 	}
 
 	h.logger.WithFields(logrus.Fields{
-		"mr_id":     event.MergeRequest.ID,
-		"mr_iid":    event.MergeRequest.IID,
-		"state":     event.MergeRequest.State,
-		"source":    event.MergeRequest.SourceBranch,
-		"target":    event.MergeRequest.TargetBranch,
+		"mr_id":  event.MergeRequest.ID,
+		"mr_iid": event.MergeRequest.IID,
+		"state":  event.MergeRequest.State,
+		"source": event.MergeRequest.SourceBranch,
+		"target": event.MergeRequest.TargetBranch,
 	}).Info("Processing merge request event")
 
 	// Check if MR has associated pipelines
@@ -519,7 +518,7 @@ func (h *WebhookHandler) VerifySignature(payload []byte, signature string) bool 
 func HMACSHA256(data []byte, secret string) string {
 	h := hmac.New(sha256.New, []byte(secret))
 	h.Write(data)
-	return fmt.Sprintf("sha256=%x", h.Sum(nil))
+	return fmt.Sprintf("sha256=0%x", h.Sum(nil))
 }
 
 // CheckEventAllowed checks if an event type is allowed
@@ -548,11 +547,11 @@ func (h *WebhookHandler) SetupHandler() http.Handler {
 // HealthCheck returns the health status of the webhook handler
 func (h *WebhookHandler) HealthCheck() map[string]interface{} {
 	return map[string]interface{}{
-		"status":          "healthy",
-		"handler_count":   h.GetHandlerCount("all"),
-		"has_secret":      h.secret != "",
-		"has_client":      h.client != nil,
-		"verify_ssl":      h.config.VerifySSL,
+		"status":        "healthy",
+		"handler_count": h.GetHandlerCount("all"),
+		"has_secret":    h.secret != "",
+		"has_client":    h.client != nil,
+		"verify_ssl":    h.config.VerifySSL,
 	}
 }
 

@@ -13,6 +13,11 @@ interface UseWebSocketOptions {
 const DEFAULT_RECONNECT_INTERVAL = 3000
 const MAX_RECONNECT_ATTEMPTS = 5
 
+interface UseWebSocketReturn extends WebSocketStatus {
+  send: (data: unknown) => boolean
+  disconnect: () => void
+}
+
 export function useWebSocket({
   url,
   autoReconnect = true,
@@ -20,14 +25,14 @@ export function useWebSocket({
   onMessage,
   onConnect,
   onDisconnect,
-}: UseWebSocketOptions): WebSocketStatus {
+}: UseWebSocketOptions): UseWebSocketReturn {
   const [status, setStatus] = useState<WebSocketStatus>({
     connected: false,
     reconnectAttempts: 0,
   })
 
   const wsRef = useRef<WebSocket | null>(null)
-  const reconnectTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const reconnectAttemptsRef = useRef(0)
 
   // Clean up on unmount

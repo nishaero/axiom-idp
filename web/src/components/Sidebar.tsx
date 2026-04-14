@@ -5,13 +5,16 @@ export default function Sidebar() {
     { label: 'Dashboard', path: '/' },
     { label: 'Catalog', path: '/catalog' },
     { label: 'AI Assistant', path: '/ai' },
-    { label: 'Settings', path: '/settings' },
+    { label: 'Security & Compliance', path: '/settings' },
   ]
 
   return (
     <aside className="w-64 bg-white dark:bg-dark-800 border-r border-gray-200 dark:border-dark-700 shadow-sm">
       <div className="h-16 flex items-center px-6 border-b border-gray-200 dark:border-dark-700">
-        <h1 className="text-xl font-bold text-primary-600 dark:text-primary-400">Axiom</h1>
+        <div>
+          <h1 className="text-xl font-bold text-primary-600 dark:text-primary-400">Axiom IDP</h1>
+          <p className="text-xs text-gray-500 dark:text-gray-400">GitHub-native control plane</p>
+        </div>
       </div>
       <nav className="mt-6 space-y-2 px-3">
         {navItems.map((item) => (

@@ -13,7 +13,7 @@
   <br>
   <a href="https://github.com/axiom-idp/axiom/releases/latest">Download Latest Release</a>
   <br><br>
-  <a href="SECURITY.md"><img src="https://img.shields.io/badge/B%2BSI%20C5%20Compliant-Compliant-green" alt="BSI C5 Compliant"></a>
+  <a href="SECURITY.md"><img src="https://img.shields.io/badge/BSI%20C5-aligned%20baseline-green" alt="BSI C5 aligned baseline"></a>
   <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache%202.0-blue" alt="License"></a>
 </div>
 
@@ -23,17 +23,23 @@
 
 Axiom is a stateless, MCP-native Internal Developer Platform designed to provide AI-first developer experiences with minimal resource overhead. Built with security and performance at its core, Axiom leverages the Model Context Protocol (MCP) for pluggable integrations while maintaining enterprise-grade security standards.
 
+### AI Runtime Modes
+
+- `AXIOM_AI_BACKEND=local` is the default and works without Ollama.
+- `AXIOM_AI_BACKEND=ollama` sends prompts to a reachable Ollama server.
+- If Ollama fails or returns an empty response, the request falls back to local mode and the API marks the backend as `local-fallback`.
+
 ### ✨ Key Features
 
 - **AI-Native Architecture**: First-class AI integration using Model Context Protocol (MCP)
-- **Stateless Design**: Metadata-only storage, real-time data queries via Redis
+- **Stateless Design**: Metadata-only runtime state with deterministic local AI fallback
 - **MCP-Powered Integrations**: Use MCP servers for pluggable integrations (GitHub, Kubernetes, etc.)
 - **RBAC & OAuth2/OIDC**: Enterprise-grade security with fine-grained access control
 - **Low Resource Usage**: <256MB RAM footprint, optimized for edge deployment
 - **Sub-2s AI Response Time**: Optimized context windows for rapid insights
 - **Professional UI**: Modern React + TypeScript + Tailwind CSS frontend
 - **Production-Ready**: Docker, Kubernetes, systemd deployments included
-- **Security First**: BSI C5 compliant, comprehensive vulnerability scanning
+- **Security First**: BSI C5-aligned baseline, comprehensive vulnerability scanning
 - **Comprehensive Logging**: Audit trails, health monitoring, metrics export
 
 ---
@@ -42,10 +48,10 @@ Axiom is a stateless, MCP-native Internal Developer Platform designed to provide
 
 ### Prerequisites
 
-- Go 1.21+
-- Node.js 18+ and npm/pnpm
-- Docker (optional, for containerized deployment)
-- Redis 7+ (for metadata storage)
+- Go 1.22+
+- Node.js 20+ and npm
+- Docker and Docker Compose v2
+- Optional: Ollama reachable from the deployment target if you want the AI-backed mode
 
 ### Installation
 
@@ -69,38 +75,38 @@ make build
 
 ### Configuration
 
-Create `.env` file in the root directory:
+Create a `.env` file in the root directory:
 
 ```env
-# Server Configuration
-PORT=8080
-ENVIRONMENT=development
-LOG_LEVEL=info
+AXIOM_HOST=0.0.0.0
+AXIOM_PORT=8081
+AXIOM_ENV=production
+AXIOM_LOG_LEVEL=info
+AXIOM_SESSION_SECRET=replace-with-a-long-random-secret
+AXIOM_AI_BACKEND=local
+# AXIOM_AI_BACKEND=ollama
+# AXIOM_AI_BASE_URL=http://host.docker.internal:11434
+# AXIOM_AI_MODEL=qwen3.5:9b
+```
 
-# MCP Configuration
-MCP_SERVERS=github,kubernetes,terraform
+For Ollama-backed runs, start Ollama separately and pull the target model before starting Axiom:
 
-# OAuth2 Configuration
-OAUTH_PROVIDER=https://accounts.google.com
-OAUTH_CLIENT_ID=your-client-id
-OAUTH_CLIENT_SECRET=your-client-secret
-
-# Redis Configuration
-REDIS_URL=redis://localhost:6379
-REDIS_PASSWORD=your-redis-password
+```bash
+ollama pull qwen3.5:9b
+ollama serve
 ```
 
 ### Running
 
 ```bash
-# Start the server
-./bin/axiom-server
+# Start the server with local fallback mode
+AXIOM_AI_BACKEND=local ./bin/axiom-server
 
-# Or with Docker
-docker compose up -d
+# Or with Docker Compose
+docker compose up -d --build
 
-# Or with Docker Compose (full stack)
-docker-compose up -d
+# Or with Ollama on your machine
+AXIOM_AI_BACKEND=ollama AXIOM_AI_BASE_URL=http://host.docker.internal:11434 docker compose up -d --build
 ```
 
 Visit `http://localhost:8080` in your browser.
@@ -132,7 +138,7 @@ make dev
 ### Docker Development
 
 ```bash
-docker compose --profile dev up
+docker compose up -d --build
 ```
 
 ### Project Structure
@@ -189,22 +195,45 @@ axiom-idp/
 
 See [SECURITY.md](SECURITY.md) for:
 - Security policy and incident response
-- BSI C5 compliance information
+- BSI C5-aligned baseline controls and deployment requirements
 - Vulnerability disclosure process
 - Security headers and configurations
 - Audit logging configuration
 
 ### Security Features
 
-- **BSI C5 Compliance**: Follows German federal standards for IT security
+- **BSI C5-aligned baseline**: Hardened container runtime, least-privilege defaults, audit logging, and deployment guidance
 - **Container Scanning**: Trivy integration for vulnerability detection
 - **Secret Detection**: TruffleHog for detecting hardcoded secrets
-- **Dependency Scanning**: npm audit, govulncheck for CVE detection
-- **Static Analysis**: golangci-lint, gosec, codeQL
+- **Dependency Scanning**: `govulncheck` and `npm audit` for CVE detection
+- **Static Analysis**: `gosec` and GitHub code scanning
 - **Audit Logging**: Comprehensive request/response logging
 - **Rate Limiting**: API rate limiting and protection
 - **CORS Protection**: Configurable CORS policies
 - **HTTPS Enforcement**: TLS 1.3 with modern ciphers
+
+## 🤖 GitHub Governance
+
+The repository is wired for GitHub-native lifecycle automation:
+- `labels.json` is the source of truth for managed labels
+- issue forms pre-label bug reports and feature requests with `needs-triage`
+- PRs are labeled automatically by touched area and marked `needs-review`
+- stale issues and PRs are marked with a dedicated `stale` label before closing
+- the bootstrap script applies repository settings and branch protection on the default branch
+
+Branch protection assumes these GitHub check names stay stable:
+- `Backend Tests`
+- `Frontend Tests`
+- `Build Container Image`
+- `Docker Compose Smoke Test`
+- `Container Vulnerability Scan`
+- `Go Security Analysis`
+- `Secret Detection`
+- `Infrastructure as Code Security`
+- `Dependency Vulnerability Check`
+- `License Compliance Check`
+
+Those checks are enforced before merge when the bootstrap script is used.
 
 ---
 
@@ -220,6 +249,9 @@ cd web && npm test
 # Run E2E tests
 ./test-e2e.sh
 
+# Validate Docker / Minikube deployments
+make verify-docker
+make verify-minikube
 # Generate coverage report
 go tool cover -func=coverage.out
 go tool cover -html=coverage.out -o coverage.html
@@ -295,14 +327,18 @@ curl http://localhost:8080/api/v1/auth/login
 ### Docker Compose
 
 ```bash
-docker-compose up -d
+docker compose up -d --build
 ```
 
 ### Kubernetes
 
 ```bash
-kubectl apply -k deployments/k8s/
+kubectl apply -f deployments/k8s-deployment.yaml
 ```
+
+### GitHub Container Registry
+
+Release images are published to `ghcr.io/axiom-idp/axiom` and the GitHub release pipeline pushes hardened container builds there.
 
 ### Systemd Service
 

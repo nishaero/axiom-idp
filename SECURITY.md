@@ -18,9 +18,9 @@ We will acknowledge your email within 24 hours and provide a detailed response w
 Never commit sensitive information. Use `.env` files (add to `.gitignore`):
 
 ```env
-OAUTH_CLIENT_SECRET=***
-API_KEYS=***
-DATABASE_PASSWORD=***
+AXIOM_SESSION_SECRET=***
+AXIOM_OAUTH_CLIENT_SECRET=***
+AXIOM_DB_URL=***
 ```
 
 ### Authentication
@@ -61,13 +61,17 @@ We use:
 
 - **Trivy**: Container image scanning
 - **Gosec**: Go source code analysis
+- **govulncheck**: Go module vulnerability analysis
+- **TruffleHog**: Secret detection
+- **Checkov**: Infrastructure-as-code scanning
 - **GitHub Actions**: Automated security checks
 
 Run locally:
 
 ```bash
-trivy image axiom:latest
+trivy image ghcr.io/axiom-idp/axiom:latest
 gosec ./...
+govulncheck ./...
 ```
 
 ## Security Headers
@@ -77,9 +81,11 @@ Default security headers enabled:
 ```
 X-Content-Type-Options: nosniff
 X-Frame-Options: DENY
-X-XSS-Protection: 1; mode=block
-Strict-Transport-Security: max-age=31536000
-Content-Security-Policy: default-src 'self'
+Referrer-Policy: strict-origin-when-cross-origin
+Permissions-Policy: geolocation=(), microphone=(), camera=()
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Resource-Policy: same-origin
+Content-Security-Policy: default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'
 ```
 
 ## Updates
@@ -102,16 +108,18 @@ Implement least privilege:
 
 ## Compliance
 
-Axiom IDP default security measures:
+Axiom IDP implements a BSI C5-aligned baseline rather than a formal certification claim:
 
-- ✅ HTTPS/TLS encryption
-- ✅ OIDC/OAuth2 authentication
+- ✅ HTTPS/TLS encryption at the edge
+- ✅ OIDC/OAuth2 authentication support
 - ✅ RBAC authorization
 - ✅ Audit logging
 - ✅ Input validation
 - ✅ SQL injection prevention
 - ✅ CSRF protection
 - ✅ Rate limiting
+- ✅ Hardened container runtime settings
+- ✅ Supply-chain scanning in GitHub Actions
 
 ## Deployment Security
 
@@ -120,10 +128,9 @@ Axiom IDP default security measures:
 Use security-hardened base images:
 
 ```dockerfile
-FROM golang:1.21-alpine AS builder
-FROM alpine:latest
-RUN addgroup -g 1000 axiom && adduser -D -u 1000 -G axiom axiom
-USER axiom
+FROM golang:1.22-alpine AS builder
+FROM nginxinc/nginx-unprivileged:1.27-alpine
+USER 101
 ```
 
 ### Kubernetes
@@ -133,8 +140,12 @@ Apply security policies:
 ```yaml
 securityContext:
   runAsNonRoot: true
-  runAsUser: 1000
+  runAsUser: 101
+  allowPrivilegeEscalation: false
   readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
 ```
 
 ## Incident Response

@@ -1,0 +1,48 @@
+name: Triage
+
+on:
+  issues:
+    types: [opened, reopened, edited]
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  issue-triage:
+    if: github.event_name == 'issues'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner
+            const repo = context.repo.repo
+            const issue_number = context.payload.issue.number
+            const labels = context.payload.issue.labels.map(label => label.name)
+            if (!labels.includes('needs-triage')) {
+              await github.rest.issues.addLabels({ owner, repo, issue_number, labels: ['needs-triage'] })
+            }
+
+  pr-triage:
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/labeler@v5
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner
+            const repo = context.repo.repo
+            const issue_number = context.payload.pull_request.number
+            const labels = context.payload.pull_request.labels.map(label => label.name)
+            const toAdd = []
+            if (!labels.includes('needs-review')) toAdd.push('needs-review')
+            if (toAdd.length > 0) {
+              await github.rest.issues.addLabels({ owner, repo, issue_number, labels: toAdd })
+            }

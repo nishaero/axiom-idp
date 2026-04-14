@@ -6,51 +6,58 @@ on:
   pull_request:
     branches: [main, develop]
   schedule:
-    - cron: '0 2 * * *'  # Daily at 2:00 AM
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
 
 env:
-  IMAGE_NAME: axiom-idp
+  GO_VERSION: '1.22'
+  NODE_VERSION: '20'
 
 jobs:
   trivy:
     name: Container Vulnerability Scan
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Build Docker image
-        run: |
-          docker build -t $IMAGE_NAME:${{ github.sha }} .
+        run: docker build --pull -t axiom-idp:${{ github.sha }} .
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0
         with:
-          image-ref: $IMAGE_NAME:${{ github.sha }}
-          format: 'template'
-          template: '@/contrib/sarif.tpl'
-          output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH'
+          image-ref: axiom-idp:${{ github.sha }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
           ignore-unfixed: true
 
       - name: Upload Trivy scan results
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
-          sarif_file: 'trivy-results.sarif'
-          wait-for-processing: true
+          sarif_file: trivy-results.sarif
 
   gosec:
     name: Go Security Analysis
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: go.sum
 
       - name: Run govulncheck
         run: |
@@ -58,29 +65,29 @@ jobs:
           govulncheck ./...
 
       - name: Run gosec
-        uses: securego/gosec@master
+        uses: securego/gosec@v2.22.0
         with:
-          args: -no-fail -fmt sarif -out gosec-result.sarif ./...
+          args: -fmt sarif -out gosec-result.sarif ./...
 
       - name: Upload gosec results
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: gosec-result.sarif
 
-  gitleaks:
+  secrets:
     name: Secret Detection
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Detect secrets with TruffleHog
-        uses: trufflesecurity/trufflehog@main
-        with:
-          path: ./
-          base: ${{ github.event.repository.default_branch }}
-          head: HEAD
-          extra_args: --only-verified --json > /tmp/trufflehog-results.json
+      - name: Install TruffleHog CLI
+        run: go install github.com/trufflesecurity/trufflehog/v3@latest
+
+      - name: Scan repository for secrets
+        run: |
+          trufflehog filesystem . --only-verified --json > /tmp/trufflehog-results.json
 
       - name: Upload TruffleHog results
         uses: actions/upload-artifact@v4
@@ -93,6 +100,7 @@ jobs:
   checkov:
     name: Infrastructure as Code Security
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
@@ -107,78 +115,59 @@ jobs:
 
       - name: Run checkov IaC scan
         run: |
-          checkov -d . --check-filename=Dockerfile,docker-compose.yml,*.yml,*.yaml
-          echo "✅ Infrastructure as Code security scan completed"
-
-      - name: Upload checkov results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: checkov-results
-          path: /tmp/checkov_*
-          retention-days: 30
+          checkov -f Dockerfile -f docker-compose.yml -f deployments/k8s-deployment.yaml
 
   dependency-check:
     name: Dependency Vulnerability Check
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
 
-      - name: Check Go dependencies
-        run: |
-          go mod why | tee /tmp/go-deps.txt
-          echo "✅ Go dependencies checked"
+      - name: Check Go modules
+        run: go list -m all
 
-      - name: Set up Node
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
-          cache: 'npm'
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
 
       - name: Install npm dependencies
-        run: |
-          cd web
-          npm ci
+        working-directory: web
+        run: npm ci
 
       - name: Run npm audit
-        run: |
-          cd web
-          npm audit --audit-level=high > /tmp/npm-audit.log || true
-          cat /tmp/npm-audit.log
-
-      - name: Upload audit results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: npm-audit-results
-          path: /tmp/npm-audit.log
-          retention-days: 30
+        working-directory: web
+        run: npm audit --audit-level=high
 
   license-compliance:
     name: License Compliance Check
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
       - name: Install license-checker
-        run: pip install license-checker
+        run: npm install -g license-checker
+
+      - name: Install frontend dependencies
+        working-directory: web
+        run: npm ci
 
       - name: Check project licenses
+        working-directory: web
         run: |
-          license-checker --json --no-color --out /tmp/licenses.json \
-            --exclude 'MIT,BSD,SleepyCat,Unicode,Apache-2.0'
+          license-checker --production --json --out /tmp/licenses.json
           cat /tmp/licenses.json
 
       - name: Upload license report

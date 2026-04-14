@@ -4,6 +4,7 @@ import Layout from '@/components/Layout'
 import Dashboard from '@/pages/Dashboard'
 import Catalog from '@/pages/Catalog'
 import AIAssistant from '@/pages/AIAssistant'
+import Settings from '@/pages/Settings'
 import NotFound from '@/pages/NotFound'
 
 const queryClient = new QueryClient({
@@ -24,6 +25,7 @@ function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/catalog" element={<Catalog />} />
             <Route path="/ai" element={<AIAssistant />} />
+            <Route path="/settings" element={<Settings />} />
             <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>

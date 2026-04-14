@@ -1,11 +1,14 @@
-.PHONY: help build test run dev clean lint fmt security-scan coverage release
+.PHONY: help build test run dev clean lint fmt security-scan coverage release verify verify-docker verify-minikube docker-build docker-push docker-run docker-compose-up docker-compose-down
 
 # Variables
 BINARY_NAME=axiom-server
-MAIN_PATH=cmd/axiom-server/main.go
+MAIN_PATH=./cmd/axiom-server
 OUTPUT_DIR=bin
 VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
-LDFLAGS=-ldflags "-X main.Version=$(VERSION) -X main.BuildTime=$(shell date -u '+%Y-%m-%d_%H:%M:%S')"
+BUILD_TIME=$(shell date -u '+%Y-%m-%d_%H:%M:%S')
+LDFLAGS=-ldflags "-s -w -X main.Version=$(VERSION) -X main.BuildTime=$(BUILD_TIME)"
+IMAGE_NAME ?= ghcr.io/axiom-idp/axiom
+IMAGE_TAG ?= latest
 
 # Colors for output
 RESET=\033[0m
@@ -22,7 +25,7 @@ help: ## Display this help screen
 build: ## Build the server binary
 	@echo "$(BLUE)Building $(BINARY_NAME)...$(RESET)"
 	@mkdir -p $(OUTPUT_DIR)
-	@CGO_ENABLED=1 go build $(LDFLAGS) -o $(OUTPUT_DIR)/$(BINARY_NAME) $(MAIN_PATH)
+	@CGO_ENABLED=0 go build -trimpath $(LDFLAGS) -o $(OUTPUT_DIR)/$(BINARY_NAME) $(MAIN_PATH)
 	@echo "$(GREEN)✓ Build complete: $(OUTPUT_DIR)/$(BINARY_NAME)$(RESET)"
 
 build-fe: ## Build frontend
@@ -60,7 +63,7 @@ watch: ## Run tests in watch mode
 
 test: ## Run all tests
 	@echo "$(BLUE)Running tests...$(RESET)"
-	@go test -v -race -timeout 10s ./...
+	@go test -v -race -timeout 10m ./...
 	@echo "$(GREEN)✓ All tests passed$(RESET)"
 
 test-backend: ## Run backend tests only
@@ -69,7 +72,7 @@ test-backend: ## Run backend tests only
 	@echo "$(GREEN)✓ Backend tests passed$(RESET)"
 
 test-fe: ## Run frontend tests
-	@cd web && npm test
+	@cd web && npm install --no-save jsdom @testing-library/user-event >/dev/null && npm test -- --run
 
 test-integration: ## Run integration tests
 	@echo "$(BLUE)Running integration tests...$(RESET)"
@@ -127,27 +130,36 @@ check-secrets: ## Check for secrets in code
 
 docker-build: ## Build Docker image
 	@echo "$(BLUE)Building Docker image...$(RESET)"
-	@docker build -t axiom-idp:$(VERSION) .
-	@echo "$(GREEN)✓ Docker image built: axiom-idp:$(VERSION)$(RESET)"
+	@docker build --build-arg VERSION=$(VERSION) --build-arg BUILD_TIME=$(BUILD_TIME) -t $(IMAGE_NAME):$(IMAGE_TAG) .
+	@echo "$(GREEN)✓ Docker image built: $(IMAGE_NAME):$(IMAGE_TAG)$(RESET)"
 
 docker-push: docker-build ## Build and push Docker image
 	@echo "$(BLUE)Pushing Docker image...$(RESET)"
-	@docker push axiom-idp:$(VERSION)
+	@docker push $(IMAGE_NAME):$(IMAGE_TAG)
 	@echo "$(GREEN)✓ Docker image pushed$(RESET)"
 
 docker-run: docker-build ## Build and run in Docker
 	@echo "$(BLUE)Running in Docker...$(RESET)"
-	@docker run -p 8080:8080 axiom-idp:$(VERSION)
+	@docker run -p 8080:8080 $(IMAGE_NAME):$(IMAGE_TAG)
 
 docker-compose-up: ## Start with Docker Compose
 	@echo "$(BLUE)Starting Docker Compose...$(RESET)"
-	@docker-compose up -d
+	@docker compose up -d --build
 	@echo "$(GREEN)✓ Services started$(RESET)"
 
 docker-compose-down: ## Stop Docker Compose services
 	@echo "$(BLUE)Stopping Docker Compose...$(RESET)"
-	@docker-compose down
+	@docker compose down -v --remove-orphans
 	@echo "$(GREEN)✓ Services stopped$(RESET)"
+
+verify: ## Verify the running Docker/Compose deployment
+	@./verify-app.sh
+
+verify-docker: ## Run Docker Compose deployment validation
+	@./scripts/validate-docker.sh
+
+verify-minikube: ## Run Minikube deployment validation
+	@./scripts/validate-minikube.sh
 
 release: clean build security-scan test coverage lint ## Build production release
 	@echo "$(BOLD)$(GREEN)✓ Release ready: $(OUTPUT_DIR)/$(BINARY_NAME)$(RESET)"

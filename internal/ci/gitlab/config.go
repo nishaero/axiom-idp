@@ -68,9 +68,11 @@ type FeatureFlags struct {
 func DefaultConfig() *Config {
 	return &Config{
 		Client: ClientConfig{
-			Timeout:      30 * time.Second,
-			RetryCount:   3,
-			RetryDelay:   5 * time.Second,
+			APIURL:     "https://gitlab.com",
+			APIToken:   "placeholder-token",
+			Timeout:    30 * time.Second,
+			RetryCount: 3,
+			RetryDelay: 5 * time.Second,
 		},
 		Webhook: WebhookConfig{
 			Path:           "/api/v1/ci/gitlab/webhook",
@@ -89,12 +91,12 @@ func DefaultConfig() *Config {
 			CORSOrigins: []string{"*"},
 		},
 		Features: FeatureFlags{
-			EnablePipelineTriggering:  true,
-			EnableJobCancellation:     true,
-			EnableJobRetry:            true,
+			EnablePipelineTriggering:      true,
+			EnableJobCancellation:         true,
+			EnableJobRetry:                true,
 			EnableMergeRequestIntegration: true,
-			EnableCostReporting:       true,
-			EnableServiceCatalog:      true,
+			EnableCostReporting:           true,
+			EnableServiceCatalog:          true,
 		},
 	}
 }

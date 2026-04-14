@@ -66,8 +66,8 @@ func TestRouter_QueryEndpoint(t *testing.T) {
 
 	// Test query endpoint
 	query := &QueryRequest{
-		Text:    "What services do you have?",
-		UserID:  "test-user-123",
+		Text:   "What services do you have?",
+		UserID: "test-user-123",
 	}
 
 	body, err := json.Marshal(query)
@@ -213,9 +213,9 @@ func TestRouter_QueryContextManagement(t *testing.T) {
 
 	// First query with context
 	query1 := &QueryRequest{
-		Text:       "What are my preferences?",
-		UserID:     "test-user-context",
-		ContextID:  "context-context",
+		Text:              "What are my preferences?",
+		UserID:            "test-user-context",
+		ContextID:         "context-context",
 		AdditionalContext: map[string]string{"lastQuery": "setup"},
 	}
 
@@ -228,9 +228,9 @@ func TestRouter_QueryContextManagement(t *testing.T) {
 
 	// Second query in same context
 	query2 := &QueryRequest{
-		Text:       "Tell me more about that",
-		UserID:     "test-user-context",
-		ContextID:  "context-context",
+		Text:      "Tell me more about that",
+		UserID:    "test-user-context",
+		ContextID: "context-context",
 	}
 
 	body2, _ := json.Marshal(query2)
@@ -253,7 +253,7 @@ func TestRouter_ErrorHandling(t *testing.T) {
 
 	// Test with empty query
 	req := &QueryRequest{
-		Text: "",
+		Text:   "",
 		UserID: "test-user-error",
 	}
 
@@ -275,7 +275,7 @@ func TestRouter_ErrorHandling(t *testing.T) {
 }
 
 func TestRouter_Cleanup(t *testing.T) {
-	router, server := createTestRouter()
+	router, _ := createTestRouter()
 
 	ctx := context.Background()
 	if err := router.Init(ctx); err != nil {
@@ -315,31 +315,34 @@ func (m *mockEngine) ProcessQuery(ctx context.Context, query *QueryRequest, engi
 func (m *mockEngine) GetRecommendations(ctx context.Context, request *RecommendationsRequest, engine *RecommendationEngine) (*RecommendationsResponse, error) {
 	// Mock implementation
 	return &RecommendationsResponse{
-		RequestID:       "mock-request-id",
-		GeneratedAt:     time.Now(),
-		ProcessingTime:  20,
-		Recommendations: []string{"mock1", "mock2"},
+		RequestID:      "mock-request-id",
+		GeneratedAt:    time.Now(),
+		ProcessingTime: 20,
+		Recommendations: []Recommendation{
+			{ServiceID: "mock1", ServiceName: "Mock Service 1"},
+			{ServiceID: "mock2", ServiceName: "Mock Service 2"},
+		},
 	}, nil
 }
 
 func (m *mockEngine) SemanticSearch(ctx context.Context, query map[string]interface{}) (map[string]interface{}, error) {
 	// Mock implementation
 	return map[string]interface{}{
-		"query":      query["query"],
-		"top_k":      query["top_k"],
-		"results":    []string{},
-		"results_count": 0,
+		"query":              query["query"],
+		"top_k":              query["top_k"],
+		"results":            []string{},
+		"results_count":      0,
 		"search_duration_ms": 10,
 	}, nil
 }
 
 func (m *mockEngine) GetStatistics(ctx context.Context) map[string]interface{} {
 	return map[string]interface{}{
-		"total_queries":  0,
+		"total_queries":         0,
 		"total_recommendations": 0,
-		"total_searches": 0,
-		"active_contexts": 0,
-		"engines_count":  0,
-		"total_latency_ms": 0,
+		"total_searches":        0,
+		"active_contexts":       0,
+		"engines_count":         0,
+		"total_latency_ms":      0,
 	}
 }

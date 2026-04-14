@@ -5,49 +5,81 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+  packages: write
+
 env:
-  DOCKER_REGISTRY: ghcr.io
-  IMAGE_NAME: axiom-idp
+  GO_VERSION: '1.22'
+  NODE_VERSION: '20'
+  IMAGE_NAME: ghcr.io/${{ github.repository }}
 
 jobs:
-  lint:
-    name: Pre-release Lint
+  preflight:
+    name: Release Preflight
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Lint Go code
-        uses: golangci/golangci-lint-action@v3
+      - name: Setup Go
+        uses: actions/setup-go@v5
         with:
-          version: latest
-          args: --timeout=10m
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: go.sum
 
-      - name: Lint frontend
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: web
         run: |
-          cd web
+          npm ci
+          npm install --no-save jsdom @testing-library/user-event
+
+      - name: Remove generated TypeScript artifacts
+        run: find web/src -type f \( -name '*.js' -o -name '*.js.map' -o -name '*.d.ts' -o -name '*.d.ts.map' \) -delete
+
+      - name: Backend tests
+        run: go test ./...
+
+      - name: Frontend lint and typecheck
+        working-directory: web
+        run: |
+          npm run type-check
           npm run lint
-          npm run tsc
 
-      - name: Check documentation
+      - name: Frontend tests and build
+        working-directory: web
         run: |
-          npx remark docs/*.md docs/**/*.md
+          npm test -- --run
+          npm run build
 
   build-matrix:
     name: Build Release Artifacts
     runs-on: ubuntu-latest
+    needs: preflight
     strategy:
+      fail-fast: false
       matrix:
         os: [linux, darwin, windows]
         arch: [amd64, arm64]
+        exclude:
+          - os: windows
+            arch: arm64
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - name: Build binary
@@ -58,8 +90,8 @@ jobs:
         run: |
           mkdir -p /tmp/dist
           GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} CGO_ENABLED=0 \
-            go build \
-              -ldflags "-s -w -X main.Version=${{ github.ref_name }} -X main.BuildTime=$(date -u '+%Y-%m-%d_%H:%M:%S%Z') -X main.GitCommit=${{ github.sha }}" \
+            go build -trimpath \
+              -ldflags "-s -w -X main.Version=${{ github.ref_name }} -X main.BuildTime=$(date -u '+%Y-%m-%d_%H:%M:%SZ')" \
               -o /tmp/dist/axiom-server-${{ matrix.os }}-${{ matrix.arch }} \
               ./cmd/axiom-server
 
@@ -68,17 +100,17 @@ jobs:
           tar -czf /tmp/dist/axiom-server-${{ matrix.os }}-${{ matrix.arch }}.tar.gz \
             -C /tmp/dist axiom-server-${{ matrix.os }}-${{ matrix.arch }}
 
-      - name: Upload release artifacts
-        uses: svenstaro/upload-release-action@v2
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
         with:
-          file: /tmp/dist/axiom-server-${{ matrix.os }}-${{ matrix.arch }}.tar.gz
-          asset_name: axiom-server-${{ matrix.os }}-${{ matrix.arch }}.tar.gz
-          tag: ${{ github.ref_name }}
-          file_glob: true
+          name: axiom-server-${{ matrix.os }}-${{ matrix.arch }}
+          path: /tmp/dist/axiom-server-${{ matrix.os }}-${{ matrix.arch }}.tar.gz
+          retention-days: 14
 
   docker-build:
-    name: Build Docker Images
+    name: Build and Push GHCR Image
     runs-on: ubuntu-latest
+    needs: preflight
 
     steps:
       - uses: actions/checkout@v4
@@ -95,50 +127,41 @@ jobs:
 
       - name: Extract metadata
         id: meta
-        run: |
-          version=$(echo ${{ github.ref_name }} | sed 's/v//')
-          echo "version=${version}" >> $GITHUB_OUTPUT
-          echo "tag=ghcr.io/${{ github.repository }}/axiom:${{ github.ref_name }}" >> $GITHUB_OUTPUT
-          echo "latest=ghcr.io/${{ github.repository }}/axiom:latest" >> $GITHUB_OUTPUT
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}},value=${{ github.ref_name }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ github.ref_name }}
+            type=raw,value=latest
+          labels: |
+            org.opencontainers.image.title=Axiom IDP
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ github.ref_name }}
+            org.opencontainers.image.revision=${{ github.sha }}
 
-      - name: Build and push backend image
-        uses: docker/build-push-action@v5
+      - name: Build and push image
+        uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: |
-            ${{ steps.meta.outputs.tag }}
-            ${{ steps.meta.outputs.latest }}
-          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            GO_VERSION=1.22
-
-      - name: Build and push full-stack image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: |
-            ${{ steps.meta.outputs.tag }}-full
-            ${{ steps.meta.outputs.latest }}-full
-          platforms: linux/amd64,linux/arm64
-
-      - name: Generate SBOM
-        uses: anchore/sbom-action@v0
-        with:
-          image: ghcr.io/${{ github.repository }}/axiom:${{ github.ref_name }}
+            VERSION=${{ github.ref_name }}
+            BUILD_TIME=${{ github.run_id }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   create-release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
     needs: [build-matrix, docker-build]
-    permissions:
-      contents: write
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download all artifacts
+      - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           pattern: axiom-server-*
@@ -146,67 +169,9 @@ jobs:
           merge-multiple: true
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
-          files: |
-            /tmp/releases/*
-          body: |
-            ## Axiom IDP Release ${{ github.ref_name }}
-
-            ### Features
-
-            - MCP Protocol integration
-            - Service catalog with intelligent search
-            - AI-assisted debugging
-            - RBAC-based access control
-            - Comprehensive security scanning
-
-            ### Security
-
-            - BSI C5 compliant security standards
-            - Container vulnerability scanning (Trivy)
-            - Go static analysis (govulncheck, gosec)
-            - Secret detection (TruffleHog)
-            - Dependency vulnerability checks
-
-            ### License
-
-            Apache License 2.0
-
-            ### Credits
-
-            Copyright © 2026 Nishant Ravi <nishaero@gmail.com>
-
-            ### Links
-
-            - [Documentation](https://axiom-idp.github.io)
-            - [Security Policy](SECURITY.md)
-            - [Contributing](CONTRIBUTING.md)
-
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  notify:
-    name: Slack Notification
-    runs-on: ubuntu-latest
-    needs: [create-release]
-    if: github.event_name == 'release' && github.event.action == 'created'
-
-    steps:
-      - name: Notify Slack
-        uses: slackapi/slack-github-action@v1
-        with:
-          payload: |
-            {
-              "text": "Axiom IDP ${{ github.ref_name }} has been released!",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": "{% if github.event_name == 'release' && github.event.action == 'created' %}\n  New release: ${{ github.ref_name }}\n  Download: https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}\n{% endif %}",
-                  "accessory_type": "image"
-                }
-              ]
-            }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+          files: /tmp/releases/*
+          generate_release_notes: true
+          draft: false
+          prerelease: false

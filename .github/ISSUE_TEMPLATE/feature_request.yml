@@ -1,0 +1,38 @@
+name: Feature Request
+description: Propose a new capability or workflow improvement
+title: "[Feature]: "
+labels:
+  - enhancement
+  - needs-triage
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+      description: What operator, developer, or compliance problem should this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the behavior and success criteria.
+    validations:
+      required: true
+  - type: textarea
+    id: uniqueness
+    attributes:
+      label: Why this is unique to Axiom
+      description: Explain why this strengthens Axiom instead of copying an existing portal pattern.
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - low
+        - medium
+        - high
+    validations:
+      required: true

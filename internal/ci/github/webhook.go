@@ -1,21 +1,21 @@
 package github
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 
-	"github.com/google/go-github/v56/github"
 	"github.com/sirupsen/logrus"
 )
 
 // WebhookHandler handles GitHub webhook events
 type WebhookHandler struct {
-	logger     *logrus.Logger
-	client     *GitHubClient
-	secret     string
-	registry   *EventHandlerRegistry
+	logger   *logrus.Logger
+	client   *GitHubClient
+	secret   string
+	registry *EventHandlerRegistry
 }
 
 // EventHandlerRegistry manages event handlers
@@ -43,7 +43,7 @@ func (r *EventHandlerRegistry) GetHandlers(eventType string) []func(event *PREve
 // NewWebhookHandler creates a new webhook handler
 func NewWebhookHandler(logger *logrus.Logger, client *GitHubClient, secret string, registry *EventHandlerRegistry) *WebhookHandler {
 	return &WebhookHandler{
-		logger:   logger.WithField("component", "webhook_handler"),
+		logger:   logger,
 		client:   client,
 		secret:   secret,
 		registry: registry,
@@ -80,10 +80,10 @@ func (h *WebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.logger.WithFields(logrus.Fields{
-		"event":    r.Header.Get("X-GitHub-Event"),
-		"action":   event.Action,
-		"repo":     event.Repository.FullName,
-		"pr_number": event.PR.Number,
+		"event":     r.Header.Get("X-GitHub-Event"),
+		"action":    event.Action,
+		"repo":      event.Repository.FullName,
+		"pr_number": event.Number,
 	}).Info("Received webhook event")
 
 	// Process event
@@ -157,6 +157,28 @@ func parsePREvent(payload []byte) (*PREvent, error) {
 			return nil, fmt.Errorf("failed to parse pull request: %w", err)
 		}
 		event.PR = *pr
+		event.Number = pr.Number
+		event.State = pr.State
+		event.Title = pr.Title
+		event.Body = pr.Body
+		event.Head = struct {
+			Ref  string `json:"ref"`
+			SHA  string `json:"sha"`
+			User User   `json:"user"`
+		}{
+			Ref:  pr.Head.Ref,
+			SHA:  pr.Head.Sha,
+			User: User{},
+		}
+		event.Base = struct {
+			Ref  string `json:"ref"`
+			SHA  string `json:"sha"`
+			User User   `json:"user"`
+		}{
+			Ref:  pr.Base.Ref,
+			SHA:  pr.Base.Sha,
+			User: User{},
+		}
 	}
 
 	// Parse sender
@@ -268,7 +290,7 @@ func parseStatusEvent(payload []byte) (*PREvent, error) {
 		}
 		commit := &Commit{}
 		json.Unmarshal(commitJSON, commit)
-		event.PR.HeadCommit = commit
+		event.HeadCommit = commit
 	}
 
 	return event, nil

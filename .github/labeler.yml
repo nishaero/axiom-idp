@@ -1,0 +1,34 @@
+backend:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "cmd/**"
+          - "internal/**"
+
+frontend:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "web/**"
+
+ci-cd:
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/**"
+          - "Dockerfile"
+          - "docker-compose.yml"
+          - "deployments/**"
+          - "scripts/**"
+          - "Makefile"
+
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "*.md"
+          - "docs/**"
+
+security:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "internal/auth/**"
+          - "internal/server/**"
+          - "SECURITY.md"
+          - ".github/workflows/security-scan.yml"

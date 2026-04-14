@@ -1,78 +1,132 @@
-#!/bin/bash
-# Axiom IDP - Application Verification Script
-# Tests that all components are working correctly
+#!/usr/bin/env bash
 
-set -e
+set -euo pipefail
 
-echo "=========================================="
-echo "Axiom IDP - Application Verification"
-echo "=========================================="
-echo ""
+BASE_URL=${BASE_URL:-http://127.0.0.1:8080}
+FRONTEND_URL=${FRONTEND_URL:-$BASE_URL}
+AUTH_TOKEN=${AUTH_TOKEN:-}
+TIMEOUT_SECONDS=${TIMEOUT_SECONDS:-60}
 
-# Colors
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# Test results
-TESTS_PASSED=0
-TESTS_FAILED=0
+passed=0
+failed=0
 
-# Helper function to test
-test_endpoint() {
-    local name=$1
-    local method=$2
-    local url=$3
-    local expected=$4
-    
-    echo -n "Testing $name... "
-    result=$(curl -s -X $method "$url" 2>&1 || echo "FAILED")
-    
-    if echo "$result" | grep -q "$expected"; then
-        echo -e "${GREEN}PASSED${NC}"
-        ((TESTS_PASSED++))
-    else
-        echo -e "${RED}FAILED${NC}"
-        echo "  Expected: $expected"
-        echo "  Got: $result"
-        ((TESTS_FAILED++))
-    fi
+log() {
+  printf '%b\n' "$*"
 }
 
-# Test Backend
-echo "Testing Backend API (Port 8080)..."
-echo ""
+pass() {
+  log "${GREEN}PASS${NC} $1"
+  passed=$((passed + 1))
+}
 
-test_endpoint "Health Check" "GET" "http://localhost:8080/health" "status"
-test_endpoint "Server is running" "GET" "http://localhost:8080/health" "ok"
+fail() {
+  log "${RED}FAIL${NC} $1"
+  failed=$((failed + 1))
+}
 
-echo ""
-echo "Testing Frontend (Port 3000)..."
-echo ""
+wait_for_url() {
+  local url=$1
+  local deadline=$((SECONDS + TIMEOUT_SECONDS))
 
-test_endpoint "Frontend Loading" "GET" "http://localhost:3000/" "Axiom IDP"
-test_endpoint "Frontend Assets" "GET" "http://localhost:3000/assets/index" "script"
+  until curl -fsS "$url" >/dev/null 2>&1; do
+    if (( SECONDS >= deadline )); then
+      return 1
+    fi
+    sleep 1
+  done
+}
 
-echo ""
-echo "=========================================="
-echo "Test Results:"
-echo "=========================================="
-echo -e "Passed: ${GREEN}${TESTS_PASSED}${NC}"
-echo -e "Failed: ${RED}${TESTS_FAILED}${NC}"
-echo ""
+json_field() {
+  local payload=$1
+  local field=$2
 
-if [ $TESTS_FAILED -eq 0 ]; then
-    echo -e "${GREEN}✓ All tests passed!${NC}"
-    echo ""
-    echo "Application is running successfully!"
-    echo ""
-    echo "Access the application:"
-    echo "  Frontend: http://localhost:3000"
-    echo "  Backend API: http://localhost:8080"
-    echo "  Health Check: http://localhost:8080/health"
-    exit 0
+  printf '%s' "$payload" | sed -n "s/.*\"${field}\":\"\([^\"]*\)\".*/\1/p"
+}
+
+request() {
+  local method=$1
+  local url=$2
+  local body=${3:-}
+  local headers=("-H" "Accept: application/json")
+
+  if [[ -n "${AUTH_TOKEN}" ]]; then
+    headers+=("-H" "Authorization: Bearer ${AUTH_TOKEN}")
+  fi
+
+  if [[ -n "${body}" ]]; then
+    curl -fsS -X "$method" "${headers[@]}" -H "Content-Type: application/json" -d "$body" "$url"
+  else
+    curl -fsS -X "$method" "${headers[@]}" "$url"
+  fi
+}
+
+log "Checking health endpoint at ${BASE_URL}/health"
+wait_for_url "${BASE_URL}/health" || {
+  fail "Health endpoint did not become ready"
+  exit 1
+}
+
+health_payload=$(request GET "${BASE_URL}/health")
+if printf '%s' "$health_payload" | grep -q '"status":"ok"'; then
+  pass "Health endpoint returns ok"
 else
-    echo -e "${RED}✗ Some tests failed${NC}"
-    exit 1
+  fail "Unexpected health payload: ${health_payload}"
+fi
+
+log "Checking auth/login"
+login_payload=$(request POST "${BASE_URL}/api/v1/auth/login" '{}')
+token=$(json_field "$login_payload" token)
+if [[ -z "${AUTH_TOKEN}" && -n "${token}" ]]; then
+  AUTH_TOKEN=$token
+fi
+if [[ -z "${AUTH_TOKEN}" ]]; then
+  AUTH_TOKEN="bearer-check"
+fi
+pass "Login endpoint responds"
+
+catalog_payload=$(request GET "${BASE_URL}/api/v1/catalog/services")
+if printf '%s' "$catalog_payload" | grep -q '"services"'; then
+  pass "Catalog services endpoint responds"
+else
+  fail "Catalog services payload: ${catalog_payload}"
+fi
+
+search_payload=$(request GET "${BASE_URL}/api/v1/catalog/search?query=service")
+if printf '%s' "$search_payload" | grep -q '"results"'; then
+  pass "Catalog search endpoint responds"
+else
+  fail "Catalog search payload: ${search_payload}"
+fi
+
+ai_payload=$(request POST "${BASE_URL}/api/v1/ai/query" '{"query":"List available services","context_limit":2000}')
+if printf '%s' "$ai_payload" | grep -q '"response"'; then
+  pass "AI query endpoint responds"
+else
+  fail "AI query payload: ${ai_payload}"
+fi
+
+front_payload=$(request GET "${FRONTEND_URL}/")
+if printf '%s' "$front_payload" | grep -qi '<html\|axiom\|dashboard'; then
+  pass "Frontend responds"
+else
+  fail "Frontend payload did not look like HTML"
+fi
+
+headers=$(curl -fsS -D - -o /dev/null "${BASE_URL}/health")
+if printf '%s' "$headers" | grep -qi 'x-frame-options\|x-content-type-options\|content-security-policy'; then
+  pass "Security headers present"
+else
+  fail "Security headers missing"
+fi
+
+log ""
+log "Summary: ${passed} passed, ${failed} failed"
+
+if (( failed > 0 )); then
+  exit 1
 fi

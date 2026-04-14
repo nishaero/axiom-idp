@@ -1,6 +1,9 @@
 package catalog
 
-import "sync"
+import (
+	"strings"
+	"sync"
+)
 
 // Service represents a service in the catalog
 type Service struct {
@@ -102,13 +105,23 @@ func (i *Index) Count() int {
 
 // Helper function for matching
 func matchesQuery(service *Service, query string) bool {
-	// Simple substring matching - can be enhanced with full-text search
-	if contains(service.Name, query) || contains(service.Description, query) {
+	query = strings.TrimSpace(strings.ToLower(query))
+	if query == "" {
+		return true
+	}
+
+	if strings.Contains(strings.ToLower(service.Name), query) || strings.Contains(strings.ToLower(service.Description), query) {
 		return true
 	}
 
 	for _, tag := range service.Tags {
-		if contains(tag, query) {
+		if strings.Contains(strings.ToLower(tag), query) {
+			return true
+		}
+	}
+
+	for _, value := range service.Metadata {
+		if strings.Contains(strings.ToLower(strings.TrimSpace(strings.TrimSpace(toString(value)))), query) {
 			return true
 		}
 	}
@@ -116,6 +129,13 @@ func matchesQuery(service *Service, query string) bool {
 	return false
 }
 
-func contains(str, substr string) bool {
-	return len(substr) > 0 && len(str) >= len(substr)
+func toString(v interface{}) string {
+	switch t := v.(type) {
+	case string:
+		return t
+	case []string:
+		return strings.Join(t, " ")
+	default:
+		return ""
+	}
 }

@@ -1,0 +1,27 @@
+name: Stale
+
+on:
+  schedule:
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v9
+        with:
+          stale-issue-label: stale
+          stale-pr-label: stale
+          days-before-issue-stale: 21
+          days-before-pr-stale: 14
+          days-before-issue-close: 14
+          days-before-pr-close: 14
+          exempt-issue-labels: security,compliance
+          exempt-pr-labels: security,compliance
+          stale-issue-message: "This issue has gone stale and needs confirmation that it is still actionable."
+          stale-pr-message: "This pull request has gone stale and needs an update or explicit blocker note."

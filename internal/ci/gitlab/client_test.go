@@ -1,8 +1,10 @@
 package gitlab
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -23,25 +25,25 @@ func createTestClient(t *testing.T) (*GitLabClient, *httptest.Server) {
 		switch r.URL.Path {
 		case "/api/v4/projects/1":
 			json.NewEncoder(w).Encode(map[string]interface{}{
-				"id": 1,
-				"name": "test-repo",
-				"full_name": "test-owner/test-repo",
-				"path": "test-repo",
+				"id":                  1,
+				"name":                "test-repo",
+				"full_name":           "test-owner/test-repo",
+				"path":                "test-repo",
 				"path_with_namespace": "test-owner/test-repo",
-				"description": "Test repository",
-				"visibility": "private",
-				"web_url": "https://gitlab.com/test-owner/test-repo",
-				"http_url_to_repo": "https://gitlab.com/test-owner/test-repo.git",
-				"default_branch": "main",
-				"archived": false,
+				"description":         "Test repository",
+				"visibility":          "private",
+				"web_url":             "https://gitlab.com/test-owner/test-repo",
+				"http_url_to_repo":    "https://gitlab.com/test-owner/test-repo.git",
+				"default_branch":      "main",
+				"archived":            false,
 			})
 		case "/api/v4/runners":
 			json.NewEncoder(w).Encode([]interface{}{
 				map[string]interface{}{
-					"id": 1,
+					"id":          1,
 					"description": "test-runner",
-					"active": true,
-					"status": "online",
+					"active":      true,
+					"status":      "online",
 				},
 			})
 		default:
@@ -50,9 +52,9 @@ func createTestClient(t *testing.T) (*GitLabClient, *httptest.Server) {
 	}))
 
 	config := ClientConfig{
-		APIURL: server.URL,
+		APIURL:   server.URL,
 		APIToken: "test-token",
-		Timeout: 30 * time.Second,
+		Timeout:  30 * time.Second,
 	}
 
 	client := NewGitLabClient(logger, config)
@@ -83,9 +85,9 @@ func TestGitLabClient_Validate(t *testing.T) {
 	logger.SetLevel(logrus.ErrorLevel)
 
 	config := ClientConfig{
-		APIURL: "https://gitlab.com",
+		APIURL:   "https://gitlab.com",
 		APIToken: "test-token",
-		Timeout: 100 * time.Millisecond,
+		Timeout:  100 * time.Millisecond,
 	}
 
 	client := NewGitLabClient(logger, config)
@@ -100,9 +102,9 @@ func TestGitLabClient_GetHealthStatus(t *testing.T) {
 	logger.SetLevel(logrus.ErrorLevel)
 
 	config := ClientConfig{
-		APIURL: "https://gitlab.com",
+		APIURL:   "https://gitlab.com",
 		APIToken: "test-token",
-		Timeout: 30 * time.Second,
+		Timeout:  30 * time.Second,
 	}
 
 	client := NewGitLabClient(logger, config)
@@ -132,19 +134,40 @@ func createTestWebhookHandler(t *testing.T) (*WebhookHandler, *httptest.Server) 
 }
 
 func TestWebhookHandler_Handle(t *testing.T) {
-	handler, server := createTestWebhookHandler(t)
+	_, server := createTestWebhookHandler(t)
 	defer server.Close()
 
-	// Create a mock push event payload
-	payload := map[string]string{
+	payload := map[string]interface{}{
 		"object_kind": "push",
+		"project": map[string]interface{}{
+			"id":                  1,
+			"name":                "test-repo",
+			"path_with_namespace": "test-owner/test-repo",
+			"web_url":             "https://gitlab.com/test-owner/test-repo",
+		},
+		"ref":        "refs/heads/main",
+		"before_sha": "0000000",
+		"after_sha":  "abc123",
 	}
 	payloadJSON, _ := json.Marshal(payload)
 
-	req, err := http.NewRequest("POST", server.URL, &http.Response{Body: http.NoBody})
-	// Skip this test as we need a proper request
-	_ = req
-	_ = err
+	req, err := http.NewRequest(http.MethodPost, server.URL, bytes.NewReader(payloadJSON))
+	if err != nil {
+		t.Fatalf("Failed to create request: %v", err)
+	}
+	req.Header.Set("X-Gitlab-Event", "Push Hook")
+	req.Header.Set("X-Gitlab-Token", "test-secret")
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", resp.StatusCode)
+	}
 }
 
 func TestEventRegistry_RegisterHandler(t *testing.T) {
@@ -177,10 +200,10 @@ func TestOrchestrationController_Start(t *testing.T) {
 	logger.SetLevel(logrus.ErrorLevel)
 
 	config := OrchestrationConfig{
-		EnableMetrics:         true,
+		EnableMetrics:             true,
 		MetricsCollectionInterval: 1 * time.Minute,
-		MaxConcurrentPipelines: 10,
-		EnableCostTracking:    false,
+		MaxConcurrentPipelines:    10,
+		EnableCostTracking:        false,
 	}
 
 	// Test configuration validation
@@ -217,19 +240,19 @@ func TestOrchestrationController_Metrics(t *testing.T) {
 func TestPipeline_Types(t *testing.T) {
 	now := time.Now()
 	pipeline := &Pipeline{
-		ID:            1,
-		IID:           1,
-		ProjectID:     123,
-		Ref:           "main",
-		Sha:           "abc123",
-		Status:        "success",
-		Source:        "push",
-		Duration:      120.5,
+		ID:             1,
+		IID:            1,
+		ProjectID:      123,
+		Ref:            "main",
+		Sha:            "abc123",
+		Status:         "success",
+		Source:         "push",
+		Duration:       120.5,
 		QueuedDuration: 5.0,
-		Quality:       100.0,
-		Stages:        []string{"build", "test", "deploy"},
-		StartedAt:     now,
-		FinishedAt:    now.Add(time.Minute * 2),
+		Quality:        100.0,
+		Stages:         []string{"build", "test", "deploy"},
+		StartedAt:      now,
+		FinishedAt:     now.Add(time.Minute * 2),
 	}
 
 	if pipeline.Status != "success" {
@@ -262,8 +285,8 @@ func TestJob_Types(t *testing.T) {
 		Duration:     60.0,
 		CreatedAt:    now,
 		User: User{
-			ID:     1,
-			Name:   "Test User",
+			ID:       1,
+			Name:     "Test User",
 			Username: "testuser",
 		},
 	}
@@ -282,23 +305,23 @@ func TestJob_Types(t *testing.T) {
 func TestProject_Types(t *testing.T) {
 	now := time.Now()
 	project := &Project{
-		ID:              1,
-		Name:            "test-repo",
-		FullName:        "test-owner/test-repo",
-		Path:            "test-repo",
-		Namespace:       "test-owner",
+		ID:                1,
+		Name:              "test-repo",
+		FullName:          "test-owner/test-repo",
+		Path:              "test-repo",
+		Namespace:         "test-owner",
 		PathWithNamespace: "test-owner/test-repo",
-		Description:     "Test repository",
-		Visibility:      "private",
-		WebURL:          "https://gitlab.com/test-owner/test-repo",
-		HTTPURL:         "https://gitlab.com/test-owner/test-repo.git",
-		SSHURL:          "git@gitlab.com:test-owner/test-repo.git",
-		DefaultBranch:   "main",
-		Archived:        false,
-		StarCount:       0,
-		LastActivityAt:  now,
-		CreatedAt:       now,
-		UpdatedAt:       now,
+		Description:       "Test repository",
+		Visibility:        "private",
+		WebURL:            "https://gitlab.com/test-owner/test-repo",
+		HTTPURL:           "https://gitlab.com/test-owner/test-repo.git",
+		SSHURL:            "git@gitlab.com:test-owner/test-repo.git",
+		DefaultBranch:     "main",
+		Archived:          false,
+		StarCount:         0,
+		LastActivityAt:    now,
+		CreatedAt:         now,
+		UpdatedAt:         now,
 	}
 
 	if project.Name != "test-repo" {
@@ -319,27 +342,27 @@ func TestProject_Types(t *testing.T) {
 func TestMergeRequest_Types(t *testing.T) {
 	now := time.Now()
 	mr := &MergeRequest{
-		ID:            1,
-		IID:           1,
-		ProjectID:     123,
-		Title:         "Test MR",
-		Description:   "Test description",
-		State:         "opened",
-		SourceBranch:  "feature",
-		TargetBranch:  "main",
-		Merged:        false,
-		Sha:           "abc123",
-		Subscribed:    true,
-		CreatedAt:     now,
-		UpdatedAt:     now,
+		ID:           1,
+		IID:          1,
+		ProjectID:    123,
+		Title:        "Test MR",
+		Description:  "Test description",
+		State:        "opened",
+		SourceBranch: "feature",
+		TargetBranch: "main",
+		Merged:       false,
+		Sha:          "abc123",
+		Subscribed:   true,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 		User: User{
-			ID:     1,
-			Name:   "Test User",
+			ID:       1,
+			Name:     "Test User",
 			Username: "testuser",
 		},
 		Author: User{
-			ID:     1,
-			Name:   "Test User",
+			ID:       1,
+			Name:     "Test User",
 			Username: "testuser",
 		},
 	}
@@ -362,13 +385,13 @@ func TestMergeRequest_Types(t *testing.T) {
 func TestVariable_Types(t *testing.T) {
 	now := time.Now()
 	variable := &Variable{
-		Key:            "APP_ENV",
-		Value:          "production",
-		Protected:      true,
-		Masked:         false,
+		Key:              "APP_ENV",
+		Value:            "production",
+		Protected:        true,
+		Masked:           false,
 		EnvironmentScope: "production",
-		CreatedAt:      now,
-		UpdatedAt:      now,
+		CreatedAt:        now,
+		UpdatedAt:        now,
 	}
 
 	if variable.Key != "APP_ENV" {

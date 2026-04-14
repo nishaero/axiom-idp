@@ -17,11 +17,11 @@ import (
 
 // GitLabClient represents a GitLab API v4 client
 type GitLabClient struct {
-	apiURL       string
-	apiToken     string
-	httpClient   *http.Client
-	config       ClientConfig
-	logger       *logrus.Logger
+	apiURL     string
+	apiToken   string
+	httpClient *http.Client
+	config     ClientConfig
+	logger     *logrus.Logger
 }
 
 // ClientConfig contains GitLab client configuration
@@ -44,51 +44,50 @@ type WebhookConfig struct {
 	EnableAuditLog bool
 }
 
-
 // Project represents a GitLab project
 type Project struct {
-	ID              int       `json:"id"`
-	Name            string    `json:"name"`
-	FullName        string    `json:"full_name"`
-	Path            string    `json:"path"`
-	Namespace       string    `json:"namespace"`
-	PathWithNamespace string  `json:"path_with_namespace"`
-	Description     string    `json:"description"`
-	Visibility      string    `json:"visibility"`
-	WebURL          string    `json:"web_url"`
-	HTTPURL         string    `json:"http_url_to_repo"`
-	SSHURL          string    `json:"ssh_url_to_repo"`
-	DefaultBranch   string    `json:"default_branch"`
-	Archived        bool      `json:"archived"`
-	LastActivityAt  time.Time `json:"last_activity_at"`
-	StarCount       int       `json:"star_count"`
-	ForkCount       int       `json:"fork_count"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	ID                int       `json:"id"`
+	Name              string    `json:"name"`
+	FullName          string    `json:"full_name"`
+	Path              string    `json:"path"`
+	Namespace         string    `json:"namespace"`
+	PathWithNamespace string    `json:"path_with_namespace"`
+	Description       string    `json:"description"`
+	Visibility        string    `json:"visibility"`
+	WebURL            string    `json:"web_url"`
+	HTTPURL           string    `json:"http_url_to_repo"`
+	SSHURL            string    `json:"ssh_url_to_repo"`
+	DefaultBranch     string    `json:"default_branch"`
+	Archived          bool      `json:"archived"`
+	LastActivityAt    time.Time `json:"last_activity_at"`
+	StarCount         int       `json:"star_count"`
+	ForkCount         int       `json:"fork_count"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
 }
 
 // Pipeline represents a GitLab CI/CD pipeline
 type Pipeline struct {
-	ID            int64       `json:"id"`
-	 IID          int64       `json:"iid"`
-	ProjectID     int64       `json:"project_id"`
-	Ref           string      `json:"ref"`
-	Sha           string      `json:"sha"`
-	Status        string      `json:"status"`
-	Source        string      `json:"source"`
-	BeforeSha     string      `json:"before_sha"`
-	Tag           bool        `json:"tag"`
-	YamlErrors    string      `json:"yaml_errors"`
-	User          User        `json:"user"`
-	StartedAt     time.Time   `json:"started_at"`
-	FinishedAt    time.Time   `json:"finished_at"`
-	Duration      float64     `json:"duration"`
-	QueuedDuration float64    `json:"queued_duration"`
-	Quality       float64     `json:"quality"`
-	Failures      int         `json:"failed_job_count"`
-	StatusChangedAt time.Time  `json:"status_changed_at"`
-	Stages        []string    `json:"stages"`
-	JobStatus     string      `json:"job_status"`
+	ID              int64     `json:"id"`
+	IID             int64     `json:"iid"`
+	ProjectID       int64     `json:"project_id"`
+	Ref             string    `json:"ref"`
+	Sha             string    `json:"sha"`
+	Status          string    `json:"status"`
+	Source          string    `json:"source"`
+	BeforeSha       string    `json:"before_sha"`
+	Tag             bool      `json:"tag"`
+	YamlErrors      string    `json:"yaml_errors"`
+	User            User      `json:"user"`
+	StartedAt       time.Time `json:"started_at"`
+	FinishedAt      time.Time `json:"finished_at"`
+	Duration        float64   `json:"duration"`
+	QueuedDuration  float64   `json:"queued_duration"`
+	Quality         float64   `json:"quality"`
+	Failures        int       `json:"failed_job_count"`
+	StatusChangedAt time.Time `json:"status_changed_at"`
+	Stages          []string  `json:"stages"`
+	JobStatus       string    `json:"job_status"`
 }
 
 // Job represents a GitLab CI/CD job
@@ -109,6 +108,7 @@ type Job struct {
 	Duration       float64   `json:"duration"`
 	QueuedDuration float64   `json:"queued_duration"`
 	QueuedAt       time.Time `json:"queued_at"`
+	CreatedAt      time.Time `json:"created_at"`
 	StartedAt      time.Time `json:"started_at"`
 	FinishedAt     time.Time `json:"finished_at"`
 	ArtifactsCount int       `json:"artifacts_count"`
@@ -135,85 +135,85 @@ type Runner struct {
 
 // MergeRequest represents a GitLab merge request (MR)
 type MergeRequest struct {
-	ID              int64     `json:"id"`
-	IID             int       `json:"iid"`
-	ProjectID       int64     `json:"project_id"`
-	Title           string    `json:"title"`
-	Description     string    `json:"description"`
-	State           string    `json:"state"`
-	SourceBranch    string    `json:"source_branch"`
-	TargetBranch    string    `json:"target_branch"`
-	Merged          bool      `json:"merged"`
-	MergedBy        *User     `json:"merged_by"`
-	MergedAt        time.Time `json:"merged_at"`
-	Sha             string    `json:"sha"`
-	DiffSha         string    `json:"diff_sha"`
-	Subscribed      bool      `json:"subscribed"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
-	ClosedAt        time.Time `json:"closed_at"`
-	TargetProjectID int64     `json:"target_project_id"`
-	User            User      `json:"user"`
-	Author          User      `json:"author"`
-	Assignee        *User     `json:"assignee"`
-	MergeWhenPipelineSucceeds bool `json:"merge_when_pipeline_succeeds"`
-	Repository      struct {
-		URL      string `json:"url"`
-		Format   string `json:"format"`
+	ID                        int64     `json:"id"`
+	IID                       int       `json:"iid"`
+	ProjectID                 int64     `json:"project_id"`
+	Title                     string    `json:"title"`
+	Description               string    `json:"description"`
+	State                     string    `json:"state"`
+	SourceBranch              string    `json:"source_branch"`
+	TargetBranch              string    `json:"target_branch"`
+	Merged                    bool      `json:"merged"`
+	MergedBy                  *User     `json:"merged_by"`
+	MergedAt                  time.Time `json:"merged_at"`
+	Sha                       string    `json:"sha"`
+	DiffSha                   string    `json:"diff_sha"`
+	Subscribed                bool      `json:"subscribed"`
+	CreatedAt                 time.Time `json:"created_at"`
+	UpdatedAt                 time.Time `json:"updated_at"`
+	ClosedAt                  time.Time `json:"closed_at"`
+	TargetProjectID           int64     `json:"target_project_id"`
+	User                      User      `json:"user"`
+	Author                    User      `json:"author"`
+	Assignee                  *User     `json:"assignee"`
+	MergeWhenPipelineSucceeds bool      `json:"merge_when_pipeline_succeeds"`
+	Repository                struct {
+		URL    string `json:"url"`
+		Format string `json:"format"`
 	} `json:"repository"`
 }
 
 // User represents a GitLab user
 type User struct {
-	ID         int       `json:"id"`
-	Name       string    `json:"name"`
-	Username   string    `json:"username"`
-	State      string    `json:"state"`
-	AvatarURL  string    `json:"avatar_url"`
-	WebURL     string    `json:"web_url"`
-	Email      string    `json:"email"`
-	Role       string    `json:"role"`
+	ID        int    `json:"id"`
+	Name      string `json:"name"`
+	Username  string `json:"username"`
+	State     string `json:"state"`
+	AvatarURL string `json:"avatar_url"`
+	WebURL    string `json:"web_url"`
+	Email     string `json:"email"`
+	Role      string `json:"role"`
 }
 
 // Variable represents a GitLab CI variable
 type Variable struct {
-	Key            string    `json:"key"`
-	Value          string    `json:"value"`
-	Protected      bool      `json:"protected"`
-	Masked         bool      `json:"masked"`
-	EnvironmentScope string  `json:"environment_scope"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	Key              string    `json:"key"`
+	Value            string    `json:"value"`
+	Protected        bool      `json:"protected"`
+	Masked           bool      `json:"masked"`
+	EnvironmentScope string    `json:"environment_scope"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }
 
 // WebhookEvent represents a GitLab webhook event
 type WebhookEvent struct {
-	EventType      string              `json:"object_kind"`
-	EventName      string              `json:"event_name"`
-	Project        Project             `json:"project"`
-	Pipeline       *Pipeline           `json:"pipeline,omitempty"`
-	Job            *Job                `json:"build,omitempty"`
-	Runner         *Runner             `json:"runner,omitempty"`
-	MergeRequest   *MergeRequest       `json:"merge_request,omitempty"`
-	Ref            string              `json:"ref,omitempty"`
-	BeforeSha      string              `json:"before_sha,omitempty"`
-	AfterSha       string              `json:"after_sha,omitempty"`
-	Commits        []Commit            `json:"commits,omitempty"`
-	Author         *User               `json:"author,omitempty"`
-	Labels         []map[string]interface{} `json:"labels,omitempty"`
-	TriggerType    string              `json:"ref_protected,omitempty"`
+	EventType    string                   `json:"object_kind"`
+	EventName    string                   `json:"event_name"`
+	Project      Project                  `json:"project"`
+	Pipeline     *Pipeline                `json:"pipeline,omitempty"`
+	Job          *Job                     `json:"build,omitempty"`
+	Runner       *Runner                  `json:"runner,omitempty"`
+	MergeRequest *MergeRequest            `json:"merge_request,omitempty"`
+	Ref          string                   `json:"ref,omitempty"`
+	BeforeSha    string                   `json:"before_sha,omitempty"`
+	AfterSha     string                   `json:"after_sha,omitempty"`
+	Commits      []Commit                 `json:"commits,omitempty"`
+	Author       *User                    `json:"author,omitempty"`
+	Labels       []map[string]interface{} `json:"labels,omitempty"`
+	TriggerType  string                   `json:"ref_protected,omitempty"`
 }
 
 // Commit represents a commit in GitLab
 type Commit struct {
-	ID        string    `json:"id"`
-	SHA       string    `json:"short_id"`
-	Message   string    `json:"message"`
+	ID        string       `json:"id"`
+	SHA       string       `json:"short_id"`
+	Message   string       `json:"message"`
 	Author    CommitAuthor `json:"author"`
 	Committer CommitAuthor `json:"committer"`
-	Stats     CommitStats `json:"stats"`
-	Duration  float64   `json:"duration_seconds,omitempty"`
-	Status    string    `json:"status,omitempty"`
+	Stats     CommitStats  `json:"stats"`
+	Duration  float64      `json:"duration_seconds,omitempty"`
+	Status    string       `json:"status,omitempty"`
 }
 
 // CommitAuthor represents commit author information
@@ -231,16 +231,16 @@ type CommitStats struct {
 
 // PipelineJob represents a job in a pipeline
 type PipelineJob struct {
-	ID          int64     `json:"id"`
-	Name        string    `json:"name"`
-	Status      string    `json:"status"`
-	Stage       string    `json:"stage"`
-	CreatedAt   time.Time `json:"created_at"`
-	StartedAt   time.Time `json:"started_at"`
-	FinishedAt  time.Time `json:"finished_at"`
-	Duration    float64   `json:"duration"`
-	AllowFailure bool     `json:"allow_failure"`
-	Artifacts   []Artifact `json:"artifacts"`
+	ID           int64      `json:"id"`
+	Name         string     `json:"name"`
+	Status       string     `json:"status"`
+	Stage        string     `json:"stage"`
+	CreatedAt    time.Time  `json:"created_at"`
+	StartedAt    time.Time  `json:"started_at"`
+	FinishedAt   time.Time  `json:"finished_at"`
+	Duration     float64    `json:"duration"`
+	AllowFailure bool       `json:"allow_failure"`
+	Artifacts    []Artifact `json:"artifacts"`
 }
 
 // Artifact represents a pipeline artifact
@@ -312,13 +312,17 @@ func (c *GitLabClient) GetBaseURL() string {
 	return c.apiURL
 }
 
+func (c *GitLabClient) apiV4BaseURL() string {
+	base := strings.TrimRight(c.apiURL, "/")
+	if !strings.HasSuffix(base, "/api/v4") {
+		base += "/api/v4"
+	}
+	return base
+}
+
 // buildRequest creates an HTTP request with authentication
 func (c *GitLabClient) buildRequest(ctx context.Context, method, endpoint string, body interface{}) (*http.Request, error) {
-	fullURL := c.apiURL
-	if !strings.HasSuffix(c.apiURL, "/") {
-		fullURL = c.apiURL + "/"
-	}
-	fullURL += strings.TrimPrefix(endpoint, "/")
+	fullURL := c.apiV4BaseURL() + "/" + strings.TrimPrefix(endpoint, "/")
 
 	var req *http.Request
 	var err error
@@ -358,7 +362,7 @@ func (c *GitLabClient) executeRequest(ctx context.Context, req *http.Request) (*
 				return nil, ctx.Err()
 			}
 			c.logger.WithFields(logrus.Fields{
-				"error":  err,
+				"error":   err,
 				"attempt": i + 1,
 			}).Warn("Request failed, will retry")
 
@@ -514,12 +518,12 @@ func (c *GitLabClient) ListProjects(ctx context.Context, opts *ListProjectsOptio
 
 // ListProjectsOptions contains options for listing projects
 type ListProjectsOptions struct {
-	Page        int
-	PerPage     int
-	Search      string
-	Owned       *bool
-	Membership  *bool
-	Visibility  string
+	Page       int
+	PerPage    int
+	Search     string
+	Owned      *bool
+	Membership *bool
+	Visibility string
 }
 
 // CreatePipeline creates a new pipeline
@@ -561,7 +565,7 @@ func (c *GitLabClient) CreatePipeline(ctx context.Context, projectID int, ref, m
 // GetPipeline fetches pipeline information
 func (c *GitLabClient) GetPipeline(ctx context.Context, projectID int, pipelineID int64) (*Pipeline, error) {
 	c.logger.WithFields(logrus.Fields{
-		"project_id": projectID,
+		"project_id":  projectID,
 		"pipeline_id": pipelineID,
 	}).Debug("Fetching pipeline")
 
@@ -656,18 +660,18 @@ func (c *GitLabClient) ListPipelines(ctx context.Context, projectID int, opts *L
 
 // ListPipelinesOptions contains options for listing pipelines
 type ListPipelinesOptions struct {
-	Page   int
+	Page    int
 	PerPage int
-	Status string
-	Ref    string
-	Branch string
-	SHA    string
+	Status  string
+	Ref     string
+	Branch  string
+	SHA     string
 }
 
 // GetPipelineJobs fetches jobs in a pipeline
 func (c *GitLabClient) GetPipelineJobs(ctx context.Context, projectID int, pipelineID int64) ([]Job, error) {
 	c.logger.WithFields(logrus.Fields{
-		"project_id": projectID,
+		"project_id":  projectID,
 		"pipeline_id": pipelineID,
 	}).Debug("Fetching pipeline jobs")
 
@@ -909,9 +913,9 @@ func (c *GitLabClient) RegisterRunner(ctx context.Context, token, description, t
 	}).Debug("Registering runner")
 
 	body := map[string]interface{}{
-		"token":      token,
+		"token":       token,
 		"description": description,
-		"tag_list":   strings.Split(tagList, ","),
+		"tag_list":    strings.Split(tagList, ","),
 	}
 
 	req, err := c.buildRequest(ctx, http.MethodPost, "runners", body)
@@ -1098,14 +1102,14 @@ func (c *GitLabClient) AcceptMergeRequest(ctx context.Context, projectID int, MR
 // CreateVariable creates a CI variable
 func (c *GitLabClient) CreateVariable(ctx context.Context, projectID int, key, value, envScope string) (*Variable, error) {
 	c.logger.WithFields(logrus.Fields{
-		"project_id":    projectID,
-		"key":           key,
-		"env_scope":     envScope,
+		"project_id": projectID,
+		"key":        key,
+		"env_scope":  envScope,
 	}).Debug("Creating variable")
 
 	body := map[string]interface{}{
-		"key":            key,
-		"value":          value,
+		"key":               key,
+		"value":             value,
 		"environment_scope": envScope,
 	}
 
@@ -1253,7 +1257,7 @@ func (c *GitLabClient) GetEnvironments(ctx context.Context, projectID int) ([]En
 // GetPipelineArtifacts fetches pipeline artifacts
 func (c *GitLabClient) GetPipelineArtifacts(ctx context.Context, projectID int, pipelineID int64) ([]Artifact, error) {
 	c.logger.WithFields(logrus.Fields{
-		"project_id": projectID,
+		"project_id":  projectID,
 		"pipeline_id": pipelineID,
 	}).Debug("Fetching pipeline artifacts")
 
@@ -1277,7 +1281,7 @@ func (c *GitLabClient) GetPipelineArtifacts(ctx context.Context, projectID int, 
 
 // GetHealthStatus returns health status of GitLab client
 func (c *GitLabClient) GetHealthStatus(ctx context.Context) map[string]interface{} {
-	url := fmt.Sprintf("%s/api/v4/application", c.apiURL)
+	url := c.apiV4BaseURL() + "/application"
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
 	if err != nil {
@@ -1299,11 +1303,11 @@ func (c *GitLabClient) GetHealthStatus(ctx context.Context) map[string]interface
 	defer resp.Body.Close()
 
 	return map[string]interface{}{
-		"status":    "healthy",
-		"timeout":   c.config.Timeout.String(),
-		"api_url":   c.apiURL,
-		"has_auth":  c.apiToken != "",
-		"version":   resp.Header.Get("X-GitLab-Version"),
+		"status":   "healthy",
+		"timeout":  c.config.Timeout.String(),
+		"api_url":  c.apiURL,
+		"has_auth": c.apiToken != "",
+		"version":  resp.Header.Get("X-GitLab-Version"),
 	}
 }
 
@@ -1321,8 +1325,8 @@ func (c *GitLabClient) GetMRStatus(ctx context.Context, projectID int, MRIID int
 func (c *GitLabClient) GetMRJobs(ctx context.Context, projectID int, MRIID int) ([]Job, error) {
 	// Get pipelines filtered by source branch
 	pipelines, err := c.ListPipelines(ctx, projectID, &ListPipelinesOptions{
-		Status:   "success",
-		Ref:      "refs/merge-requests/" + strconv.Itoa(MRIID) + "/merge",
+		Status: "success",
+		Ref:    "refs/merge-requests/" + strconv.Itoa(MRIID) + "/merge",
 	})
 	if err != nil {
 		return nil, err
@@ -1330,7 +1334,7 @@ func (c *GitLabClient) GetMRJobs(ctx context.Context, projectID int, MRIID int) 
 
 	// Return jobs from most recent pipeline
 	if len(pipelines) > 0 {
-		return c.GetPipelineJobs(ctx, int(pipelines[0].ID), pipelines[0].ID)
+		return c.GetPipelineJobs(ctx, projectID, pipelines[0].ID)
 	}
 
 	return []Job{}, nil

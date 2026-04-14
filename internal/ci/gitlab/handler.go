@@ -14,12 +14,12 @@ import (
 
 // APIHandler handles HTTP requests for GitLab CI integration
 type APIHandler struct {
-	logger           *logrus.Logger
-	client           *GitLabClient
-	webhookHandler   *WebhookHandler
-	orchestrator     *OrchestrationController
-	allowCORS        bool
-	corsOrigins      []string
+	logger         *logrus.Logger
+	client         *GitLabClient
+	webhookHandler *WebhookHandler
+	orchestrator   *OrchestrationController
+	allowCORS      bool
+	corsOrigins    []string
 }
 
 // NewAPIHandler creates a new API handler
@@ -232,10 +232,10 @@ func (h *APIHandler) handleListProjects(w http.ResponseWriter, r *http.Request) 
 
 	// Return paginated response
 	response := map[string]interface{}{
-		"projects":      projects,
-		"total":         len(projects),
-		"page":          opts.Page,
-		"per_page":      opts.PerPage,
+		"projects": projects,
+		"total":    len(projects),
+		"page":     opts.Page,
+		"per_page": opts.PerPage,
 	}
 
 	h.writeJSON(w, response)
@@ -432,7 +432,7 @@ func (h *APIHandler) handleCreatePipeline(w http.ResponseWriter, r *http.Request
 
 	// Parse request body
 	var body struct {
-		Ref   string `json:"ref"`
+		Ref     string `json:"ref"`
 		Message string `json:"message"`
 	}
 
@@ -756,7 +756,6 @@ func (h *APIHandler) handleGetProjectWrapper(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *APIHandler) handleProjectHealthWrapper(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
 	// Extract project ID from path for validation
 	if strings.HasPrefix(r.URL.Path, "/projects/") {
 		h.handleProjectHealth(w, r)
