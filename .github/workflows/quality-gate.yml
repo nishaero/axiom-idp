@@ -62,7 +62,7 @@ jobs:
         run: actionlint -color
 
       - name: Run go vet
-        run: go vet ./...
+        run: go vet ./... 2>&1 | tee /tmp/go-vet.txt
 
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v6

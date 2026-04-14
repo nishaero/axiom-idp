@@ -38,7 +38,7 @@ jobs:
         run: go test -v -race -timeout 10m ./...
 
       - name: Run Go vet
-        run: go vet ./...
+        run: go vet ./... 2>&1 | tee /tmp/go-vet.txt
 
       - name: Build backend binary
         run: make build

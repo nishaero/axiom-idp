@@ -30,7 +30,7 @@ jobs:
         run: docker build --pull -t axiom-idp:${{ github.sha }} .
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@v0.33.1
         with:
           image-ref: axiom-idp:${{ github.sha }}
           format: sarif
@@ -161,7 +161,7 @@ jobs:
 
       - name: Run npm audit
         working-directory: web
-        run: npm audit --omit=dev --audit-level=high
+        run: npm audit --omit=dev --audit-level=high 2>&1 | tee /tmp/npm-audit.txt
 
   license-compliance:
     name: License Compliance Check
