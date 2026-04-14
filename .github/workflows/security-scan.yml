@@ -16,6 +16,7 @@ permissions:
 env:
   GO_VERSION: '1.24.9'
   NODE_VERSION: '24'
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
   trivy:
@@ -29,28 +30,17 @@ jobs:
       - name: Build Docker image
         run: docker build --pull -t axiom-idp:${{ github.sha }} .
 
-      - name: Install Trivy
-        run: |
-          go install github.com/aquasecurity/trivy/cmd/trivy@v0.69.3
-          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
-
       - name: Run Trivy vulnerability scanner
-        run: |
-          trivy image \
-            --format sarif \
-            --output trivy-results.sarif \
-            --severity CRITICAL,HIGH \
-            --ignore-unfixed \
-            --exit-code 0 \
-            axiom-idp:${{ github.sha }}
-
-      - name: Prepare Trivy SARIF
-        if: always()
-        run: |
-          test -f trivy-results.sarif || printf '{"version":"2.1.0","runs":[]}' > trivy-results.sarif
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: axiom-idp:${{ github.sha }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
 
       - name: Publish Trivy SARIF
-        if: always()
+        if: always() && hashFiles('trivy-results.sarif') != ''
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-results.sarif
