@@ -30,7 +30,7 @@ jobs:
         run: docker build --pull -t axiom-idp:${{ github.sha }} .
 
       - name: Install Trivy
-        uses: aquasecurity/setup-trivy@v0.2.2
+        uses: aquasecurity/setup-trivy@v0.2.4
         with:
           version: v0.65.0
 
