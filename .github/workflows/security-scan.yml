@@ -30,10 +30,9 @@ jobs:
         run: docker build --pull -t axiom-idp:${{ github.sha }} .
 
       - name: Install Trivy
-        run: |
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
-            | sh -s -- -b "$HOME/.local/bin" v0.65.0
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        uses: aquasecurity/setup-trivy@v0.2.2
+        with:
+          version: v0.65.0
 
       - name: Run Trivy vulnerability scanner
         run: |
