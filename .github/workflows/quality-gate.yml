@@ -52,10 +52,6 @@ jobs:
         working-directory: web
         run: npm ci
 
-      - name: Install frontend lint helpers
-        working-directory: web
-        run: npm install --no-save --legacy-peer-deps eslint-plugin-react-hooks eslint-plugin-react-refresh@0.4.26
-
       - name: Remove generated TypeScript artifacts
         run: find web/src -type f \( -name '*.js' -o -name '*.js.map' -o -name '*.d.ts' -o -name '*.d.ts.map' \) -delete
 
@@ -63,7 +59,7 @@ jobs:
         run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
 
       - name: Lint workflows
-        run: actionlint -color
+        run: ~/go/bin/actionlint -color
 
       - name: Run go vet
         run: go vet ./... 2>&1 | tee /tmp/go-vet.txt
