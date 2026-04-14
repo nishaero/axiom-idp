@@ -18,14 +18,6 @@ type PGVectorEmbeddings struct {
 	config PGVectorConfig
 }
 
-// PGVectorConfig contains configuration for pgvector
-type PGVectorConfig struct {
-	CollectionSize int
-	COSIMDistance  bool
-	TopK           int
-	Threshold      float32
-}
-
 // NewPGVectorEmbeddings creates a new pgvector embeddings client
 func NewPGVectorEmbeddings(logger *logrus.Logger, db *sql.DB, config PGVectorConfig) *PGVectorEmbeddings {
 	return &PGVectorEmbeddings{
@@ -104,7 +96,7 @@ func (p *PGVectorEmbeddings) StoreEmbedding(ctx context.Context, id string, vect
 	category, _ := metadata["category"].(string)
 
 	// Convert tags to array
-	tags := p.convertTagsToPGArray(metadata["tags])
+	tags := p.convertTagsToPGArray(metadata["tags"])
 
 	insertSQL := `
 	INSERT INTO service_embeddings (id, service_id, service_name, category, tags, metadata, embedding)

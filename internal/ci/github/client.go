@@ -253,7 +253,7 @@ func NewGitHubClient(logger *logrus.Logger, config ClientConfig) *GitHubClient {
 		baseURL:       config.BaseURL,
 		webhookSecret: config.WebhookSecret,
 		config:        config,
-		logger:        logger.WithField("component", "github_client"),
+		logger:        logger,
 		httpClient:    client,
 	}
 }
@@ -269,8 +269,6 @@ func (c *GitHubClient) Validate() error {
 
 // GetRepository fetches repository information
 func (c *GitHubClient) GetRepository(ctx context.Context, owner, repo string) (*Repository, error) {
-	repoFullName := fmt.Sprintf("%s/%s", owner, repo)
-
 	c.logger.WithFields(logrus.Fields{
 		"owner": owner,
 		"repo":  repo,

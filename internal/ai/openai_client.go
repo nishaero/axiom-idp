@@ -92,8 +92,8 @@ type EmbeddingUsage struct {
 	TotalTokens  int `json:"total_tokens"`
 }
 
-// OpenAIClient implements OpenAI API client
-type OpenAIClient struct {
+// OpenAIAPIClient implements OpenAI API client
+type OpenAIAPIClient struct {
 	apiKey        string
 	baseURL       string
 	model         string
@@ -121,7 +121,7 @@ type OpenAIConfig struct {
 }
 
 // NewOpenAIClient creates a new OpenAI API client
-func NewOpenAIClient(logger *logrus.Logger, config OpenAIConfig) *OpenAIClient {
+func NewOpenAIClient(logger *logrus.Logger, config OpenAIConfig) *OpenAIAPIClient {
 	if config.Timeout == 0 {
 		config.Timeout = 30 * time.Second
 	}
@@ -154,7 +154,7 @@ func NewOpenAIClient(logger *logrus.Logger, config OpenAIConfig) *OpenAIClient {
 }
 
 // Embed generates an embedding vector for the given text
-func (c *OpenAIClient) Embed(ctx context.Context, text string) ([]float32, error) {
+func (c *OpenAIAPIClient) Embed(ctx context.Context, text string) ([]float32, error) {
 	c.mu.Lock()
 	c.requestCount++
 	c.lastRequest = time.Now()
@@ -218,7 +218,7 @@ func (c *OpenAIClient) Embed(ctx context.Context, text string) ([]float32, error
 }
 
 // Complete sends a completion request to OpenAI
-func (c *OpenAIClient) Complete(ctx context.Context, prompt string) (string, error) {
+func (c *OpenAIAPIClient) Complete(ctx context.Context, prompt string) (string, error) {
 	c.mu.Lock()
 	c.requestCount++
 	c.lastRequest = time.Now()
@@ -280,7 +280,7 @@ func (c *OpenAIClient) Complete(ctx context.Context, prompt string) (string, err
 }
 
 // checkRateLimit checks if we've exceeded the rate limit
-func (c *OpenAIClient) checkRateLimit() error {
+func (c *OpenAIAPIClient) checkRateLimit() error {
 	if c.config.RateLimit == 0 {
 		return nil
 	}
@@ -297,12 +297,12 @@ func (c *OpenAIClient) checkRateLimit() error {
 }
 
 // GetConfig returns the current configuration
-func (c *OpenAIClient) GetConfig() OpenAIConfig {
+func (c *OpenAIAPIClient) GetConfig() OpenAIConfig {
 	return c.config
 }
 
 // SetConfig updates the configuration
-func (c *OpenAIClient) SetConfig(config OpenAIConfig) {
+func (c *OpenAIAPIClient) SetConfig(config OpenAIConfig) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.config = config
@@ -312,7 +312,7 @@ func (c *OpenAIClient) SetConfig(config OpenAIConfig) {
 }
 
 // GetStats returns client statistics
-func (c *OpenAIClient) GetStats() map[string]interface{} {
+func (c *OpenAIAPIClient) GetStats() map[string]interface{} {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -327,7 +327,7 @@ func (c *OpenAIClient) GetStats() map[string]interface{} {
 }
 
 // ResetStats resets the request counter
-func (c *OpenAIClient) ResetStats() {
+func (c *OpenAIAPIClient) ResetStats() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.requestCount = 0
@@ -335,8 +335,8 @@ func (c *OpenAIClient) ResetStats() {
 }
 
 // NewMockOpenAIClient creates a mock OpenAI client for testing
-func NewMockOpenAIClient() *OpenAIClient {
-	return &OpenAIClient{
+func NewMockOpenAIClient() *OpenAIAPIClient {
+	return &OpenAIAPIClient{
 		apiKey:         "mock-key",
 		baseURL:        "https://api.openai.com/v1",
 		model:          "gpt-3.5-turbo",
@@ -352,7 +352,7 @@ func NewMockOpenAIClient() *OpenAIClient {
 }
 
 // Embed returns mock embeddings (fixed vector for consistency)
-func (c *OpenAIClient) Embed(ctx context.Context, text string) ([]float32, error) {
+func (c *OpenAIAPIClient) Embed(ctx context.Context, text string) ([]float32, error) {
 	// Generate deterministic vector based on text hash
 	vector := make([]float32, 1536)
 	hash := hashString(text)
@@ -365,7 +365,7 @@ func (c *OpenAIClient) Embed(ctx context.Context, text string) ([]float32, error
 }
 
 // Complete returns mock completions based on the prompt
-func (c *OpenAIClient) Complete(ctx context.Context, prompt string) (string, error) {
+func (c *OpenAIAPIClient) Complete(ctx context.Context, prompt string) (string, error) {
 	// Simple mock completion logic
 	lowerPrompt := fmt.Sprintf(" %s ", prompt)
 

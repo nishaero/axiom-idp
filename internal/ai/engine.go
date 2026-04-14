@@ -12,8 +12,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// OpenAIClient interface for OpenAI API communication
-type OpenAIClient interface {
+// OpenAIAPIClient interface for OpenAI API communication
+type OpenAIAPIClient interface {
 	Embed(ctx context.Context, text string) ([]float32, error)
 	Complete(ctx context.Context, prompt string) (string, error)
 }

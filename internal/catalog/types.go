@@ -20,41 +20,106 @@ const (
 	StatusRestarting ServiceStatus = "restarting"
 )
 
-// Container represents a Docker container in the catalog
-type Container struct {
-	ID            string            `json:"id"`
-	Name          string            `json:"name"`
-	Image         string            `json:"image"`
-	Status        ServiceStatus     `json:"status"`
-	State         string            `json:"state"`
-	Ports         []PortMapping     `json:"ports"`
-	Networks      []string          `json:"networks"`
-	Labels        map[string]string `json:"labels"`
-	Environment   map[string]string `json:"environment"`
-	Created       time.Time         `json:"created"`
-	StartedAt     time.Time         `json:"started_at"`
-	HealthStatus  string            `json:"health_status"`
-	Host          string            `json:"host"`
-	NodeName      string            `json:"node_name,omitempty"`
-	CgroupID      string            `json:"cgroup_id,omitempty"`
-	Pids          []string          `json:"pids,omitempty"`
-	SysInitPresent bool              `json:"sys_init_present"`
-	RootFS        string            `json:"rootfs,omitempty"`
-	OpenStdin     bool              `json:"open_stdin"`
-	StdinOnce     bool              `json:"stdin_once"`
-	Isolation     string            `json:"isolation,omitempty"`
-	Health        *Health           `json:"health,omitempty"`
-	Stats         *ContainerStats   `json:"stats,omitempty"`
-	Resources     ContainerResources `json:"resources,omitempty"`
-	Uptime        string            `json:"uptime,omitempty"`
+// Service represents a discovered service
+type Service struct {
+	ID           string            `json:"id"`
+	Name         string            `json:"name"`
+	Type         string            `json:"type"`
+	Status       string            `json:"status"`
+	HealthStatus string            `json:"health_status"`
+	Image        string            `json:"image"`
+	Ports        map[string]string `json:"ports"`
+	Labels       map[string]string `json:"labels"`
+	Annotations  map[string]string `json:"annotations"`
+	Namespace    string            `json:"namespace"`
+	Created      time.Time         `json:"created"`
+	LastUpdated  time.Time         `json:"last_updated"`
+	Details      map[string]interface{} `json:"details"`
+	Metrics      *ContainerStats   `json:"metrics,omitempty"`
+	Health       *Health           `json:"health,omitempty"`
+	Age          string            `json:"age"`
+	Conditions   []ResourceCondition `json:"conditions"`
 }
 
-// PortMapping represents a port mapping
+// Container represents a Docker container in the catalog
+type Container struct {
+	ID           string            `json:"id"`
+	Name         string            `json:"name"`
+	Image        string            `json:"image"`
+	Status       ServiceStatus     `json:"status"`
+	State        string            `json:"state"`
+	Ports        []Port            `json:"ports"`
+	Networks     []string          `json:"networks"`
+	Labels       map[string]string `json:"labels"`
+	Environment  map[string]string `json:"environment"`
+	Created      time.Time         `json:"created"`
+	StartedAt    time.Time         `json:"started_at"`
+	HealthStatus string            `json:"health_status"`
+	Host         string            `json:"host"`
+	NodeName     string            `json:"node_name,omitempty"`
+	CgroupID     string            `json:"cgroup_id,omitempty"`
+	Pids         []string          `json:"pids,omitempty"`
+	SysInitPresent bool              `json:"sys_init_present"`
+	RootFS       string            `json:"rootfs,omitempty"`
+	OpenStdin    bool              `json:"open_stdin"`
+	StdinOnce    bool              `json:"stdin_once"`
+	Isolation    string            `json:"isolation,omitempty"`
+	Health       *Health           `json:"health,omitempty"`
+	Stats        *ContainerStats   `json:"stats,omitempty"`
+	Resources    ContainerResources `json:"resources,omitempty"`
+	Uptime       string            `json:"uptime,omitempty"`
+}
+
+// Port represents a container port
+type Port struct {
+	ContainerPort int    `json:"container_port"`
+	HostPort      int    `json:"host_port"`
+	Protocol      string `json:"protocol"`
+	HostIP        string `json:"host_ip"`
+	IP            string `json:"ip"`
+	PrivatePort   int    `json:"private_port"`
+	PublicPort    int    `json:"public_port"`
+	Type          string `json:"type"`
+}
+
+// Mount represents a container mount
+type Mount struct {
+	Type             string `json:"type"`
+	Name             string `json:"name"`
+	Source           string `json:"source"`
+	Destination      string `json:"destination"`
+	Driver           string `json:"driver"`
+	Mode             string `json:"mode"`
+	RW               bool   `json:"rw"`
+	Propagation      string `json:"propagation"`
+}
+
+// PortMapping represents a port mapping (deprecated, use Port instead)
 type PortMapping struct {
 	IP         string `json:"IP"`
 	PrivatePort int    `json:"PrivatePort"`
 	PublicPort int    `json:"PublicPort"`
 	Type       string `json:"Type"`
+}
+
+// Network represents a Docker network
+type Network struct {
+	Name        string            `json:"name"`
+	ID          string            `json:"id"`
+	Scope       string            `json:"scope"`
+	Type        string            `json:"type"`
+	Driver      string            `json:"driver"`
+	IPAM        NetworkIPAM       `json:"ipam"`
+	Labels      map[string]string `json:"labels"`
+	Containers  map[string]*NetworkContainer `json:"containers"`
+	Created     time.Time         `json:"created"`
+	Internal    bool              `json:"internal"`
+	EnableIPv6  bool              `json:"enable_ipv6"`
+	Attachable  bool              `json:"attachable"`
+	Ingress     bool              `json:"ingress"`
+	ConfigFrom  map[string]interface{} `json:"config_from"`
+	ConfigOnly  bool              `json:"config_only"`
+	ContainersCount int           `json:"containers_count"`
 }
 
 // Health represents container health status
@@ -592,39 +657,70 @@ type DiscoveryMetrics struct {
 
 // Event defines the structure for catalog events
 type Event struct {
-	Type      EventType    `json:"type"`
-	Timestamp time.Time    `json:"timestamp"`
-	Service   *Service     `json:"service,omitempty"`
-	Container *Container   `json:"container,omitempty"`
-	Image     *Image       `json:"image,omitempty"`
-	Network   *Network     `json:"network,omitempty"`
-	K8sResource *ServiceResource `json:"k8s_resource,omitempty"`
-	Error     error        `json:"error,omitempty"`
-	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+	Type        EventType              `json:"type"`
+	ID          string                 `json:"id,omitempty"`
+	Timestamp   time.Time              `json:"timestamp"`
+	Service     *Service               `json:"service,omitempty"`
+	Container   *Container             `json:"container,omitempty"`
+	Image       *Image                 `json:"image,omitempty"`
+	Network     *Network               `json:"network,omitempty"`
+	Pod         *PodDetail             `json:"pod,omitempty"`
+	Deployment  *ServiceResource       `json:"deployment,omitempty"`
+	ServiceObj  *ServiceResource       `json:"service,omitempty"`
+	K8sResource *ServiceResource       `json:"k8s_resource,omitempty"`
+	Error       error                  `json:"error,omitempty"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // EventType represents the type of catalog event
 type EventType string
 
 const (
+	// Service events
 	EventServiceAdded EventType = "service.added"
 	EventServiceUpdated EventType = "service.updated"
 	EventServiceDeleted EventType = "service.deleted"
+
+	// Container events
 	EventContainerStarted EventType = "container.started"
 	EventContainerStopped EventType = "container.stopped"
 	EventContainerRestarted EventType = "container.restarted"
 	EventContainerHealthChanged EventType = "container.health_changed"
-	EventImagePullled EventType = "image.pulled"
+	EventContainerStatusChanged EventType = "container.status_changed"
+	EventContainerLogs EventType = "container.logs"
+
+	// Image events
+	EventImagePulled EventType = "image.pulled"
 	EventImageDeleted EventType = "image.deleted"
+
+	// Network events
 	EventNetworkCreated EventType = "network.created"
 	EventNetworkDeleted EventType = "network.deleted"
-	EventK8sResourceCreated EventType = "k8s_resource.created"
-	EventK8sResourceUpdated EventType = "k8s_resource.updated"
-	EventK8sResourceDeleted EventType = "k8s_resource.deleted"
+
+	// K8s resource events
+	EventPodAdded EventType = "pod.added"
+	EventPodUpdated EventType = "pod.updated"
+	EventPodDeleted EventType = "pod.deleted"
+	EventDeploymentAdded EventType = "deployment.added"
+	EventDeploymentUpdated EventType = "deployment.updated"
+	EventDeploymentDeleted EventType = "deployment.deleted"
+	EventServiceAdded EventType = "service.added"
+	EventServiceUpdated EventType = "service.updated"
+	EventServiceDeleted EventType = "service.deleted"
+
+	// Discovery events
 	EventDiscoveryCompleted EventType = "discovery.completed"
 	EventDiscoveryFailed EventType = "discovery.failed"
+
+	// Health check events
 	EventHealthCheckPassed EventType = "health_check.passed"
 	EventHealthCheckFailed EventType = "health_check.failed"
+
+	// Error event
+	EventError EventType = "error"
+
+	// System events
+	EventHeartbeat EventType = "heartbeat"
 )
 
 // Subscriber represents an event subscriber

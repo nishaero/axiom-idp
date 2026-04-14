@@ -20,7 +20,7 @@ type JenkinsClient struct {
 	apiToken    string
 	httpClient  *http.Client
 	config      ClientConfig
-	logger      *logrus.Logger
+	logger      *logrus.Entry
 }
 
 // ClientConfig contains Jenkins client configuration
@@ -264,7 +264,7 @@ func (c *JenkinsClient) BuildJob(ctx context.Context, jobName string, params []J
 }
 
 // GetBuildStatus fetches build status information
-func (c *JenkinsClient) GetBuildStatus(ctx context.Context, jobName string, buildNumber int) (*BuildStatus, error) {
+func (c *JenkinsClient) GetBuildStatus(ctx context.Context, jobName string, buildNumber int) (*Build, error) {
 	c.logger.WithFields(logrus.Fields{
 		"job":        jobName,
 		"build":      buildNumber,
@@ -293,14 +293,7 @@ func (c *JenkinsClient) GetBuildStatus(ctx context.Context, jobName string, buil
 		return nil, fmt.Errorf("failed to decode build response: %w", err)
 	}
 
-	return &BuildStatus{
-		Status:       build.Status,
-		Result:       build.Result,
-		Duration:     build.Duration,
-		Timestamp:    build.Timestamp,
-		FullURL:      build.URL,
-		EstimatedDuration: build.EstimatedDuration,
-	}, nil
+	return &build, nil
 }
 
 // GetBuildLog fetches build log
@@ -393,19 +386,16 @@ func (c *JenkinsClient) GetJobs(ctx context.Context) ([]Job, error) {
 
 	var jobs []Job
 	if jobsData, exists := response["jobs"]; exists {
-		var jobsRaw []map[string]interface{}
-		if err := json.Marshal(jobsData); err != nil {
-			return nil, err
-		}
-		if err := json.Unmarshal(jobsRaw, &jobsData); err != nil {
-			return nil, err
-		}
-
-		for _, jobData := range jobsData.([]interface{}) {
-			jobJSON, _ := json.Marshal(jobData)
-			var job Job
-			json.Unmarshal(jobJSON, &job)
-			jobs = append(jobs, job)
+		if j, ok := jobsData.([]interface{}); ok {
+			for _, item := range j {
+				if job, ok := item.(map[string]interface{}); ok {
+					jobs = append(jobs, Job{
+						Name:   fmt.Sprintf("%v", job["name"]),
+						URL:    fmt.Sprintf("%v", job["url"]),
+						Color:  fmt.Sprintf("%v", job["color"]),
+					})
+				}
+			}
 		}
 	}
 

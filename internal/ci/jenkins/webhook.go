@@ -1,6 +1,7 @@
 package jenkins
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -25,7 +26,7 @@ type WebhookPayload struct {
 
 // WebhookHandler handles Jenkins webhook events
 type WebhookHandler struct {
-	logger     *logrus.Logger
+	logger     *logrus.Entry
 	client     *JenkinsClient
 	config     WebhookConfig
 	registry   *EventRegistry

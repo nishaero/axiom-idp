@@ -16,14 +16,6 @@ type PromptTemplate struct {
 	Parameters []string
 }
 
-// PromptEngine interface for building prompts
-type PromptEngine interface {
-	BuildQueryPrompt(query *QueryContext) string
-	BuildRecommendationPrompt(query string, context map[string]string) string
-	BuildIntentPrompt(query string) string
-	BuildRAGPrompt(query string, context []string) string
-}
-
 // DefaultPromptEngine is the default implementation of PromptEngine
 type DefaultPromptEngine struct {
 	logger   *logrus.Logger
