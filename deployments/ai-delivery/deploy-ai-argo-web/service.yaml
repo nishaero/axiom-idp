@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-argo-web
+  namespace: axiom-ai-web
+  labels:
+    app.kubernetes.io/name: ai-argo-web
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: ai-argo-web
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
