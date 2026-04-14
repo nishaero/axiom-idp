@@ -10,6 +10,7 @@ permissions:
   packages: write
   id-token: write
   attestations: write
+  actions: read
 
 env:
   GO_VERSION: '1.24.9'
@@ -159,6 +160,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -173,11 +175,9 @@ jobs:
         run: docker pull ${{ env.IMAGE_NAME }}:latest
 
       - name: Install cosign
-        uses: sigstore/cosign-installer@v3
+        uses: sigstore/cosign-installer@v4
 
       - name: Sign published image
-        env:
-          COSIGN_EXPERIMENTAL: "true"
         run: cosign sign --yes ${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
 
       - name: Generate image SBOM
@@ -187,21 +187,18 @@ jobs:
           format: spdx-json
           output-file: /tmp/axiom-release-image-sbom.spdx.json
 
-      - name: Attest image SBOM
-        env:
-          COSIGN_EXPERIMENTAL: "true"
-        run: |
-          cosign attest --yes \
-            --predicate /tmp/axiom-release-image-sbom.spdx.json \
-            --type spdxjson \
-            ${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
-
       - name: Attest image provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v3
         with:
           subject-name: ${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
+
+      - name: Verify image signature
+        run: cosign verify ${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+
+      - name: Verify image attestation
+        run: gh attestation verify oci://${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }} --repo ${{ github.repository }}
 
       - name: Upload release SBOM artifact
         uses: actions/upload-artifact@v4
