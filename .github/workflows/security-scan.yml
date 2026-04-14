@@ -30,20 +30,24 @@ jobs:
       - name: Build Docker image
         run: docker build --pull -t axiom-idp:${{ github.sha }} .
 
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@0.33.1
-        with:
-          image-ref: axiom-idp:${{ github.sha }}
-          format: sarif
-          output: trivy-results.sarif
-          severity: CRITICAL,HIGH
-          ignore-unfixed: true
+      - name: Install Grype
+        run: |
+          curl -fsSL --retry 5 --retry-delay 2 --retry-all-errors \
+            -o /tmp/grype.tar.gz \
+            "https://github.com/anchore/grype/releases/download/v0.104.4/grype_0.104.4_linux_amd64.tar.gz"
+          tar -xzf /tmp/grype.tar.gz -C /tmp grype
+          install -m 0755 /tmp/grype /usr/local/bin/grype
 
-      - name: Publish Trivy SARIF
-        if: always() && hashFiles('trivy-results.sarif') != ''
-        uses: github/codeql-action/upload-sarif@v4
+      - name: Run Grype vulnerability scanner
+        run: grype "axiom-idp:${{ github.sha }}" -o json > /tmp/grype-report.json
+
+      - name: Upload Grype report
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          sarif_file: trivy-results.sarif
+          name: grype-report
+          path: /tmp/grype-report.json
+          retention-days: 7
 
   gosec:
     name: Go Security Analysis
