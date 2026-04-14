@@ -76,6 +76,8 @@ cat > /tmp/axiom-branch-protection.json <<'EOF'
     "contexts": [
       "Backend Tests",
       "Frontend Tests",
+      "Code Quality Gate",
+      "Dependency Review",
       "Build Container Image",
       "Docker Compose Smoke Test",
       "Container Vulnerability Scan",

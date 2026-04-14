@@ -153,6 +153,9 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Validate published image can be pulled
+        run: docker pull ${{ env.IMAGE_NAME }}:latest
+
   create-release:
     name: Create GitHub Release
     runs-on: ubuntu-latest

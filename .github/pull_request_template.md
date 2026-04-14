@@ -12,7 +12,10 @@ Describe the change and the reason for it.
 - [ ] `go test ./...`
 - [ ] `cd web && npm test -- --run`
 - [ ] `cd web && npm run build`
+- [ ] `Code Quality Gate` passed in GitHub
+- [ ] `Dependency Review` passed in GitHub
 - [ ] CI / security workflows passed in GitHub
+- [ ] Published image pull validation passed if image delivery changed
 - [ ] Deployment path validated if infra/runtime changed
 
 ## Compliance

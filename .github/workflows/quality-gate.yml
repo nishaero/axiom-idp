@@ -1,0 +1,96 @@
+name: Code Quality Gate
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: '1.22'
+  NODE_VERSION: '20'
+  SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+  SONAR_ORGANIZATION: ${{ vars.SONAR_ORGANIZATION }}
+  SONAR_PROJECT_KEY: ${{ vars.SONAR_PROJECT_KEY }}
+  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+jobs:
+  quality:
+    name: Code Quality Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Remove generated TypeScript artifacts
+        run: find web/src -type f \( -name '*.js' -o -name '*.js.map' -o -name '*.d.ts' -o -name '*.d.ts.map' \) -delete
+
+      - name: Install actionlint
+        run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+
+      - name: Lint workflows
+        run: actionlint -color
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.64.8
+          args: --timeout=5m
+
+      - name: Run frontend type-check
+        working-directory: web
+        run: npm run type-check
+
+      - name: Run frontend lint
+        working-directory: web
+        run: npm run lint
+
+      - name: SonarQube / SonarCloud scan
+        if: env.SONAR_TOKEN != '' && env.SONAR_PROJECT_KEY != ''
+        uses: SonarSource/sonarqube-scan-action@v2
+        env:
+          SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.projectKey=${{ env.SONAR_PROJECT_KEY }}
+            -Dsonar.sources=cmd,internal,web/src
+            -Dsonar.exclusions=web/dist/**,web/node_modules/**,**/*.d.ts,**/*.d.ts.map,**/*.js,**/*.js.map
+            -Dsonar.sourceEncoding=UTF-8
+
+      - name: Sonar fallback
+        if: env.SONAR_TOKEN == '' || env.SONAR_PROJECT_KEY == ''
+        run: |
+          echo "Sonar not configured. Using actionlint, go vet, golangci-lint, and frontend lint as the quality gate."
