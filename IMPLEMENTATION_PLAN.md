@@ -589,4 +589,4 @@ By executing this plan over 12 weeks, Axiom will achieve a sustainable competiti
 
 **Copyright © 2026 Nishant Ravi <nishaero@gmail.com>**
 
-*This document is licensed under Apache License 2.0*
+*This document is licensed under PolyForm Noncommercial 1.0.0*

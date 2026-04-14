@@ -58,6 +58,9 @@ case "${MODE}" in
     minikube image load "${IMAGE_NAME}"
 
     kubectl apply -f "${ROOT_DIR}/${MANIFEST}"
+    kubectl -n "${NAMESPACE}" create secret generic axiom-runtime-secrets \
+      --from-literal=AXIOM_SESSION_SECRET="${AXIOM_SESSION_SECRET:-test-session-secret-for-ci}" \
+      --dry-run=client -o yaml | kubectl apply -f -
     kubectl -n "${NAMESPACE}" set image deployment/axiom-server axiom-server="${IMAGE_NAME}"
     kubectl -n "${NAMESPACE}" rollout status deployment/axiom-server --timeout=180s
 

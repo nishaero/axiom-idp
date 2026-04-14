@@ -3,4 +3,6 @@
 set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-AXIOM_AI_BACKEND=${AXIOM_AI_BACKEND:-local} MODE=minikube "${ROOT_DIR}/test-e2e.sh"
+AXIOM_AI_BACKEND=${AXIOM_AI_BACKEND:-local} \
+AXIOM_SESSION_SECRET=${AXIOM_SESSION_SECRET:-test-session-secret-for-ci} \
+MODE=minikube "${ROOT_DIR}/test-e2e.sh"

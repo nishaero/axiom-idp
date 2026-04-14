@@ -314,7 +314,7 @@ axiom-idp/
 ├── deployments/              # Deployment configs ✅
 ├── .github/
 │   └── workflows/            # CI/CD workflows ✅
-├── LICENSE                   # Apache 2.0 ✅
+├── LICENSE                   # PolyForm Noncommercial 1.0.0 ✅
 ├── README.md                 # Project overview ✅
 ├── SECURITY.md               # Security policy ✅
 ├── IMPLEMENTATION_PLAN.md    # Implementation details ✅
@@ -437,4 +437,4 @@ make security-scan
 **Last Updated:** 2026-03-26
 **Copyright © 2026 Nishant Ravi <nishaero@gmail.com>**
 
-*This document is licensed under Apache License 2.0*
+*This document is licensed under PolyForm Noncommercial 1.0.0*

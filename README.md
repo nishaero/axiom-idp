@@ -2,7 +2,7 @@
 
 [![Build Status](https://github.com/axiom-idp/axiom/actions/workflows/ci.yml/badge.svg)](https://github.com/axiom-idp/axiom/actions)
 [![Security Scanning](https://github.com/axiom-idp/axiom/actions/workflows/security-scan.yml/badge.svg)](https://github.com/axiom-idp/axiom/actions)
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
+[![License](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-orange)](LICENSE)
 [![Go Report Card](https://goreportcard.com/badge/github.com/axiom-idp/axiom)](https://goreportcard.com/report/github.com/axiom-idp/axiom)
 [![Code Coverage](https://codecov.io/github/axiom-idp/axiom/graph/badge.svg)](https://codecov.io/github/axiom-idp/axiom)
 
@@ -14,7 +14,7 @@
   <a href="https://github.com/axiom-idp/axiom/releases/latest">Download Latest Release</a>
   <br><br>
   <a href="SECURITY.md"><img src="https://img.shields.io/badge/BSI%20C5-aligned%20baseline-green" alt="BSI C5 aligned baseline"></a>
-  <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache%202.0-blue" alt="License"></a>
+  <a href="https://polyformproject.org/licenses/noncommercial/1.0.0/"><img src="https://img.shields.io/badge/License-PolyForm%20Noncommercial%201.0.0-orange" alt="License"></a>
 </div>
 
 ---
@@ -378,7 +378,7 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 
 ## 📝 License
 
-Apache License 2.0 - See [LICENSE](LICENSE) for details.
+PolyForm Noncommercial 1.0.0 - See [LICENSE](LICENSE) for details. Commercial use requires a separate license from the copyright holder.
 
 **Copyright © 2026 Nishant Ravi <nishaero@gmail.com>**
 

@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
-ARG GO_VERSION=1.22
-ARG NODE_VERSION=20
+ARG GO_VERSION=1.24.9
+ARG NODE_VERSION=24
 
 FROM golang:${GO_VERSION}-alpine AS backend-builder
 WORKDIR /src
@@ -69,6 +69,18 @@ server {
         proxy_set_header Host $host;
     }
 
+    location /ready {
+        proxy_pass http://127.0.0.1:8081;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+    }
+
+    location /live {
+        proxy_pass http://127.0.0.1:8081;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+    }
+
     location / {
         root /usr/share/nginx/html;
         index index.html;
@@ -92,7 +104,6 @@ ENV AXIOM_HOST=0.0.0.0 \
     AXIOM_LOG_LEVEL=info \
     AXIOM_DB_DRIVER=sqlite3 \
     AXIOM_DB_URL=file:/var/lib/axiom/axiom.db \
-    AXIOM_SESSION_SECRET=change-me-in-production \
     AXIOM_AI_BACKEND=local \
     AXIOM_AI_TIMEOUT=90s \
     AXIOM_AI_MAX_TOKENS=768
@@ -102,6 +113,6 @@ USER 101
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD curl -fsS http://127.0.0.1:8080/health || exit 1
+    CMD curl -fsS http://127.0.0.1:8080/ready || exit 1
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

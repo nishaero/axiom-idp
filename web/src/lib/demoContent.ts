@@ -146,10 +146,10 @@ export const demoInsights: DemoInsight[] = [
 ]
 
 export const aiPromptSuggestions = [
-  'Assess the release risk for Payment API this week',
-  'Generate a BSI C5 evidence pack for the catalog',
-  'Find services missing an owner or stale controls',
-  'Summarize the last 24 hours of changes',
+  'Deploy Payment API via GitHub and Argo CD',
+  'Plan Crossplane infrastructure for Audit Ledger',
+  'Draft Terraform infrastructure for the next service',
+  'Generate a BSI C5 evidence pack for Audit Ledger',
 ]
 
 export function buildAssistantFallbackResponse(
@@ -187,6 +187,30 @@ export function buildAssistantFallbackResponse(
       `I assessed ${selectedService.name} as the primary risk focus.`,
       `It is marked ${selectedService.releaseState}, with a ${selectedService.riskLevel} risk profile and ${selectedService.healthScore}% health score.`,
       `Recommended action: keep the rollout gated, require a rollback plan, and review the ${selectedService.signals.slice(0, 2).join(' and ')} signals before promotion.`,
+    ].join('\n\n')
+  }
+
+  if (normalized.includes('deploy') || normalized.includes('deployment') || normalized.includes('rollout') || normalized.includes('status')) {
+    const isInfrastructureRequest =
+      normalized.includes('infra') ||
+      normalized.includes('infrastructure') ||
+      normalized.includes('crossplane') ||
+      normalized.includes('terraform') ||
+      normalized.includes('provision')
+
+    return [
+      isInfrastructureRequest
+        ? `I drafted an infrastructure request for ${selectedService.name}.`
+        : `I drafted a deployment request for ${selectedService.name}.`,
+      isInfrastructureRequest
+        ? 'Infrastructure delivery should be routed through Crossplane or Terraform, while the assistant keeps the request planned until the operator approves execution.'
+        : 'Application delivery should be routed through Argo CD, while the assistant keeps the request planned until the operator approves execution.',
+      selectedService.releaseState === 'blocked'
+        ? `Status: blocked until the owner gap and control evidence for ${selectedService.name} are resolved.`
+        : `Status: queued for review with ${selectedService.healthScore}% health and ${selectedService.releaseState} release posture.`,
+      isInfrastructureRequest
+        ? 'Next step: confirm the infrastructure spec, then let the assistant keep the planned and executed trail up to date.'
+        : 'Next step: confirm the application spec, then let the assistant keep the planned and executed trail up to date.',
     ].join('\n\n')
   }
 

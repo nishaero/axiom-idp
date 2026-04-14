@@ -79,7 +79,6 @@ type JobExecution struct {
 
 // OrchestrationMetrics tracks orchestration metrics
 type OrchestrationMetrics struct {
-	mu              sync.RWMutex
 	TotalPipelines  int64
 	SuccessfulPipelines  int64
 	FailedPipelines   int64
@@ -472,9 +471,7 @@ func (c *OrchestrationController) startMetricsCollection(ctx context.Context) {
 
 // collectMetrics collects and reports orchestration metrics
 func (c *OrchestrationController) collectMetrics() {
-	c.mu.RLock()
-	metrics := *c.metrics
-	c.mu.RUnlock()
+	metrics := c.metricsSnapshot()
 
 	c.logger.WithFields(logrus.Fields{
 		"total_pipelines": metrics.TotalPipelines,
@@ -526,11 +523,7 @@ func (c *OrchestrationController) registerRunners() {
 
 // GetMetrics returns current orchestration metrics
 func (c *OrchestrationController) GetMetrics() *OrchestrationMetrics {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	// Return a copy
-	metrics := *c.metrics
+	metrics := c.metricsSnapshot()
 	return &metrics
 }
 
@@ -604,6 +597,33 @@ func (c *OrchestrationController) GetAverageDuration() time.Duration {
 	}
 
 	return c.metrics.TotalDuration / time.Duration(c.metrics.TotalPipelines)
+}
+
+func (c *OrchestrationController) metricsSnapshot() OrchestrationMetrics {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	snapshot := OrchestrationMetrics{
+		TotalPipelines:      c.metrics.TotalPipelines,
+		SuccessfulPipelines: c.metrics.SuccessfulPipelines,
+		FailedPipelines:     c.metrics.FailedPipelines,
+		PendingPipelines:    c.metrics.PendingPipelines,
+		TotalDuration:       c.metrics.TotalDuration,
+		LastPipelineAt:      c.metrics.LastPipelineAt,
+		TotalCost:           c.metrics.TotalCost,
+		PipelinesByDay:      make(map[string]int64, len(c.metrics.PipelinesByDay)),
+		PipelinesByStatus:   make(map[string]int64, len(c.metrics.PipelinesByStatus)),
+	}
+
+	for key, value := range c.metrics.PipelinesByDay {
+		snapshot.PipelinesByDay[key] = value
+	}
+
+	for key, value := range c.metrics.PipelinesByStatus {
+		snapshot.PipelinesByStatus[key] = value
+	}
+
+	return snapshot
 }
 
 // MarshalJSON implements custom JSON marshaling for metrics

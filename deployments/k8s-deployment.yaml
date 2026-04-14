@@ -25,15 +25,6 @@ data:
   AXIOM_AI_MAX_TOKENS: "768"
 ---
 apiVersion: v1
-kind: Secret
-metadata:
-  name: axiom-secrets
-  namespace: axiom
-type: Opaque
-stringData:
-  AXIOM_SESSION_SECRET: "REPLACE_WITH_A_LONG_RANDOM_SECRET"
----
-apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: axiom-data
@@ -90,8 +81,12 @@ spec:
           envFrom:
             - configMapRef:
                 name: axiom-config
-            - secretRef:
-                name: axiom-secrets
+          env:
+            - name: AXIOM_SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: axiom-runtime-secrets
+                  key: AXIOM_SESSION_SECRET
           resources:
             requests:
               cpu: 100m
@@ -101,21 +96,21 @@ spec:
               memory: 512Mi
           readinessProbe:
             httpGet:
-              path: /health
+              path: /ready
               port: http
             periodSeconds: 5
             timeoutSeconds: 2
             failureThreshold: 6
           livenessProbe:
             httpGet:
-              path: /health
+              path: /live
               port: http
             periodSeconds: 10
             timeoutSeconds: 2
             failureThreshold: 3
           startupProbe:
             httpGet:
-              path: /health
+              path: /ready
               port: http
             periodSeconds: 2
             timeoutSeconds: 2

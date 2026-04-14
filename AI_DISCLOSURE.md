@@ -92,7 +92,7 @@ We acknowledge AI limitations:
 ## Open Source Compliance
 
 ✅ This project maintains full compliance with:
-- Apache 2.0 License requirements
+- PolyForm Noncommercial 1.0.0 license requirements
 - Open source community standards
 - Contributor attribution
 - Code review processes

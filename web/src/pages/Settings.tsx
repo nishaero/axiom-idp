@@ -5,23 +5,45 @@ const controlItems = [
   {
     label: 'Identity and access',
     status: 'completed' as const,
-    description: 'SSO, MFA, and role templates are ready for GitHub-backed teams.',
+    description: 'SSO, MFA, and role templates should anchor every organization that adopts the platform.',
   },
   {
     label: 'Artifact provenance',
     status: 'completed' as const,
-    description: 'Build and release metadata can be surfaced alongside service scorecards.',
+    description: 'Build and release metadata should flow into service scorecards and approval records.',
   },
   {
     label: 'Evidence retention',
     status: 'degraded' as const,
-    description: 'Retention policy is set, but some services still need an owner-attested export.',
+    description: 'Retention policy exists, but some services still need an owner-attested export.',
   },
   {
     label: 'Audit logging',
     status: 'completed' as const,
-    description: 'Immutable traces are available for deployments, approvals, and catalog changes.',
+    description: 'Immutable traces should cover deployments, approvals, catalog changes, and AI actions.',
   },
+]
+
+const operatingDefaults = [
+  {
+    title: '1. Identity and ownership',
+    description: 'Connect GitHub teams, service owners, and environment roles before rollout starts.',
+  },
+  {
+    title: '2. Release governance',
+    description: 'Require approvals, rollback plans, and evidence checks for critical or regulated services.',
+  },
+  {
+    title: '3. AI routing',
+    description: 'Ground AI responses in catalog, health, and evidence snapshots, then deep-link to the assistant.',
+  },
+]
+
+const aiTouchpoints = [
+  'Release decisions in the dashboard and catalog should be explainable and linked to the assistant.',
+  'Service drilldowns should produce ready-to-send prompts for remediation or rollout planning.',
+  'Evidence summaries should be reusable in audit, approval, and change-review workflows.',
+  'AI should reduce toil by drafting context, not by making policy decisions on its own.',
 ]
 
 export default function Settings() {
@@ -34,11 +56,11 @@ export default function Settings() {
               Security & compliance
             </div>
             <h1 className="text-3xl font-semibold tracking-tight text-gray-900 dark:text-white md:text-4xl">
-              Control access, evidence, and registry settings from one place.
+              Control access, evidence, AI routing, and registry trust from one place.
             </h1>
             <p className="max-w-2xl text-base leading-7 text-gray-600 dark:text-gray-300">
-              The demo settings page keeps the platform honest about the controls a real deployment
-              needs: identity, auditability, GitHub registry trust, and BSI C5 aligned evidence.
+              The settings page keeps the platform honest about the controls a real deployment needs:
+              identity, auditability, GitHub registry trust, BSI C5-aligned evidence, and grounded AI usage.
             </p>
             <div className="flex flex-wrap gap-3">
               <Link
@@ -65,6 +87,27 @@ export default function Settings() {
             </div>
           </Card>
         </div>
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-2">
+        <Card title="Recommended operating model" subtitle="The first settings most organizations should lock in">
+          <div className="space-y-4">
+            {operatingDefaults.map((item) => (
+              <div key={item.title} className="rounded-2xl bg-gray-50 p-4 dark:bg-dark-700/40">
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">{item.title}</p>
+                <p className="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-400">{item.description}</p>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card title="Where AI is used" subtitle="AI should reduce decision latency, not bypass controls">
+          <ul className="space-y-3 text-sm leading-6 text-gray-600 dark:text-gray-400">
+            {aiTouchpoints.map((item) => (
+              <li key={item}>• {item}</li>
+            ))}
+          </ul>
+        </Card>
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">

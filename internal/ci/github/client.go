@@ -223,7 +223,7 @@ type CheckSuite struct {
 type Deployment struct {
 	ID             int64           `json:"id"`
 	RepositoryID   int64           `json:"repository_id"`
-	sha            string          `json:"sha"`
+	SHA            string          `json:"sha"`
 	Ref            string          `json:"ref"`
 	Task           string          `json:"task"`
 	Payload        json.RawMessage `json:"payload"`

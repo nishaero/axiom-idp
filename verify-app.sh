@@ -65,17 +65,17 @@ request() {
   fi
 }
 
-log "Checking health endpoint at ${BASE_URL}/health"
-wait_for_url "${BASE_URL}/health" || {
-  fail "Health endpoint did not become ready"
+log "Checking readiness endpoint at ${BASE_URL}/ready"
+wait_for_url "${BASE_URL}/ready" || {
+  fail "Readiness endpoint did not become ready"
   exit 1
 }
 
-health_payload=$(request GET "${BASE_URL}/health")
-if printf '%s' "$health_payload" | grep -q '"status":"ok"'; then
-  pass "Health endpoint returns ok"
+health_payload=$(request GET "${BASE_URL}/ready")
+if printf '%s' "$health_payload" | grep -q '"status":"ready"'; then
+  pass "Readiness endpoint returns ready"
 else
-  fail "Unexpected health payload: ${health_payload}"
+  fail "Unexpected readiness payload: ${health_payload}"
 fi
 
 log "Checking auth/login"

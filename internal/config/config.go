@@ -49,35 +49,61 @@ type Config struct {
 	AIModel     string
 	AITimeout   time.Duration
 	AIMaxTokens int
+
+	// Kubernetes deployment control plane
+	KubectlPath              string
+	KubernetesNamespace      string
+	KubernetesApplyTimeout   time.Duration
+	KubernetesRolloutTimeout time.Duration
+
+	// GitOps / Argo CD
+	GitOpsRepoURL    string
+	GitOpsBaseBranch string
+	GitOpsBasePath   string
+	GitAuthorName    string
+	GitAuthorEmail   string
+	ArgoCDNamespace  string
+	ArgoCDProject    string
 }
 
 // NewConfig creates configuration from environment variables
 func NewConfig() *Config {
 	return &Config{
-		Port:                 getEnvInt("AXIOM_PORT", 8080),
-		Host:                 strings.TrimSpace(getEnv("AXIOM_HOST", "0.0.0.0")),
-		Environment:          strings.ToLower(strings.TrimSpace(getEnv("AXIOM_ENV", "development"))),
-		LogLevel:             strings.ToLower(strings.TrimSpace(getEnv("AXIOM_LOG_LEVEL", "info"))),
-		DBDriver:             getEnv("AXIOM_DB_DRIVER", "sqlite3"),
-		DBURL:                getEnv("AXIOM_DB_URL", "file:axiom.db"),
-		OAuthProvider:        getEnv("AXIOM_OAUTH_PROVIDER", ""),
-		OAuthClientID:        getEnv("AXIOM_OAUTH_CLIENT_ID", ""),
-		OAuthClientSecret:    getEnv("AXIOM_OAUTH_CLIENT_SECRET", ""),
-		OAuthRedirectURL:     getEnv("AXIOM_OAUTH_REDIRECT_URL", "http://localhost:8080/auth/callback"),
-		MCPConfigPath:        getEnv("AXIOM_MCP_CONFIG", "/etc/axiom/mcp.yaml"),
-		MCPTimeout:           getEnvDuration("AXIOM_MCP_TIMEOUT", "30s"),
-		SessionSecret:        getEnv("AXIOM_SESSION_SECRET", "dev-secret"),
-		SessionMaxAge:        getEnvInt("AXIOM_SESSION_MAX_AGE", 86400),
-		CORSOrigins:          getEnvList("AXIOM_CORS_ORIGINS", []string{"http://localhost:3000", "http://localhost:8080"}),
-		CORSAllowCredentials: getEnvBool("AXIOM_CORS_ALLOW_CREDENTIALS", false),
-		CORSMaxAge:           getEnvDuration("AXIOM_CORS_MAX_AGE", "10m"),
-		RateLimitRequests:    getEnvInt("AXIOM_RATE_LIMIT_REQUESTS", 1000),
-		RateLimitWindow:      getEnvDuration("AXIOM_RATE_LIMIT_WINDOW", "1m"),
-		AIBackend:            strings.ToLower(strings.TrimSpace(getEnv("AXIOM_AI_BACKEND", "local"))),
-		AIBaseURL:            strings.TrimSpace(getEnv("AXIOM_AI_BASE_URL", "http://127.0.0.1:11434")),
-		AIModel:              strings.TrimSpace(getEnv("AXIOM_AI_MODEL", "qwen3.5:9b")),
-		AITimeout:            getEnvDuration("AXIOM_AI_TIMEOUT", "90s"),
-		AIMaxTokens:          getEnvInt("AXIOM_AI_MAX_TOKENS", 768),
+		Port:                     getEnvInt("AXIOM_PORT", 8080),
+		Host:                     strings.TrimSpace(getEnv("AXIOM_HOST", "0.0.0.0")),
+		Environment:              strings.ToLower(strings.TrimSpace(getEnv("AXIOM_ENV", "development"))),
+		LogLevel:                 strings.ToLower(strings.TrimSpace(getEnv("AXIOM_LOG_LEVEL", "info"))),
+		DBDriver:                 getEnv("AXIOM_DB_DRIVER", "sqlite3"),
+		DBURL:                    getEnv("AXIOM_DB_URL", "file:axiom.db"),
+		OAuthProvider:            getEnv("AXIOM_OAUTH_PROVIDER", ""),
+		OAuthClientID:            getEnv("AXIOM_OAUTH_CLIENT_ID", ""),
+		OAuthClientSecret:        getEnv("AXIOM_OAUTH_CLIENT_SECRET", ""),
+		OAuthRedirectURL:         getEnv("AXIOM_OAUTH_REDIRECT_URL", "http://localhost:8080/auth/callback"),
+		MCPConfigPath:            getEnv("AXIOM_MCP_CONFIG", "/etc/axiom/mcp.yaml"),
+		MCPTimeout:               getEnvDuration("AXIOM_MCP_TIMEOUT", "30s"),
+		SessionSecret:            getEnv("AXIOM_SESSION_SECRET", "dev-secret"),
+		SessionMaxAge:            getEnvInt("AXIOM_SESSION_MAX_AGE", 86400),
+		CORSOrigins:              getEnvList("AXIOM_CORS_ORIGINS", []string{"http://localhost:3000", "http://localhost:8080"}),
+		CORSAllowCredentials:     getEnvBool("AXIOM_CORS_ALLOW_CREDENTIALS", false),
+		CORSMaxAge:               getEnvDuration("AXIOM_CORS_MAX_AGE", "10m"),
+		RateLimitRequests:        getEnvInt("AXIOM_RATE_LIMIT_REQUESTS", 1000),
+		RateLimitWindow:          getEnvDuration("AXIOM_RATE_LIMIT_WINDOW", "1m"),
+		AIBackend:                strings.ToLower(strings.TrimSpace(getEnv("AXIOM_AI_BACKEND", "local"))),
+		AIBaseURL:                strings.TrimSpace(getEnv("AXIOM_AI_BASE_URL", "http://127.0.0.1:11434")),
+		AIModel:                  strings.TrimSpace(getEnv("AXIOM_AI_MODEL", "qwen3.5:9b")),
+		AITimeout:                getEnvDuration("AXIOM_AI_TIMEOUT", "90s"),
+		AIMaxTokens:              getEnvInt("AXIOM_AI_MAX_TOKENS", 768),
+		KubectlPath:              strings.TrimSpace(getEnv("AXIOM_KUBECTL_PATH", "kubectl")),
+		KubernetesNamespace:      strings.TrimSpace(getEnv("AXIOM_K8S_NAMESPACE", "axiom-apps")),
+		KubernetesApplyTimeout:   getEnvDuration("AXIOM_K8S_APPLY_TIMEOUT", "90s"),
+		KubernetesRolloutTimeout: getEnvDuration("AXIOM_K8S_ROLLOUT_TIMEOUT", "180s"),
+		GitOpsRepoURL:            strings.TrimSpace(getEnv("AXIOM_GITOPS_REPO_URL", "")),
+		GitOpsBaseBranch:         strings.TrimSpace(getEnv("AXIOM_GITOPS_BASE_BRANCH", "main")),
+		GitOpsBasePath:           strings.TrimSpace(getEnv("AXIOM_GITOPS_BASE_PATH", "deployments/ai-delivery")),
+		GitAuthorName:            strings.TrimSpace(getEnv("AXIOM_GIT_AUTHOR_NAME", "axiom-bot")),
+		GitAuthorEmail:           strings.TrimSpace(getEnv("AXIOM_GIT_AUTHOR_EMAIL", "axiom-bot@users.noreply.github.com")),
+		ArgoCDNamespace:          strings.TrimSpace(getEnv("AXIOM_ARGOCD_NAMESPACE", "argocd")),
+		ArgoCDProject:            strings.TrimSpace(getEnv("AXIOM_ARGOCD_PROJECT", "default")),
 	}
 }
 
@@ -117,6 +143,14 @@ func (c *Config) Validate() error {
 
 	if c.AIMaxTokens <= 0 {
 		return fmt.Errorf("ai max tokens must be positive")
+	}
+
+	if c.KubernetesApplyTimeout > 0 && c.KubernetesApplyTimeout < 1*time.Second {
+		return fmt.Errorf("kubernetes apply timeout must be at least 1 second")
+	}
+
+	if c.KubernetesRolloutTimeout > 0 && c.KubernetesRolloutTimeout < 1*time.Second {
+		return fmt.Errorf("kubernetes rollout timeout must be at least 1 second")
 	}
 
 	if c.AIBackend == "ollama" {

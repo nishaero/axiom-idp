@@ -28,6 +28,14 @@ type Auditor struct {
 	logs []AuditLog
 }
 
+type AuditStats struct {
+	Entries      int       `json:"entries"`
+	LastEntryAt  time.Time `json:"last_entry_at,omitempty"`
+	ErrorCount   int       `json:"error_count"`
+	DeniedCount  int       `json:"denied_count"`
+	SuccessCount int       `json:"success_count"`
+}
+
 // NewAuditor creates a new auditor.
 func NewAuditor() *Auditor {
 	return &Auditor{
@@ -136,6 +144,33 @@ func (a *Auditor) Middleware(next http.Handler) http.Handler {
 		}
 		a.Log(r.Context(), userID, "http_request", r.URL.Path, statusLabel, details)
 	})
+}
+
+func (a *Auditor) Stats() AuditStats {
+	if a == nil {
+		return AuditStats{}
+	}
+
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	stats := AuditStats{Entries: len(a.logs)}
+	for _, entry := range a.logs {
+		if entry.CreatedAt.After(stats.LastEntryAt) {
+			stats.LastEntryAt = entry.CreatedAt
+		}
+
+		switch entry.Status {
+		case "error":
+			stats.ErrorCount++
+		case "denied":
+			stats.DeniedCount++
+		default:
+			stats.SuccessCount++
+		}
+	}
+
+	return stats
 }
 
 type auditResponseWriter struct {

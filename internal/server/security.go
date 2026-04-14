@@ -23,6 +23,14 @@ type RateLimiter struct {
 	cleanupThreshold int
 }
 
+type RateLimiterStats struct {
+	Enabled        bool      `json:"enabled"`
+	TrackedKeys    int       `json:"tracked_keys"`
+	RequestsSeen   int       `json:"requests_seen"`
+	LastCleanupAt  time.Time `json:"last_cleanup_at,omitempty"`
+	RequestsPerMin int       `json:"requests_per_min"`
+}
+
 type rateEntry struct {
 	limiter  *rate.Limiter
 	lastSeen time.Time
@@ -131,6 +139,23 @@ func (r *RateLimiter) Middleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, req)
 	})
+}
+
+func (r *RateLimiter) Stats() RateLimiterStats {
+	if r == nil {
+		return RateLimiterStats{}
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	return RateLimiterStats{
+		Enabled:        r.rate > 0 && r.burst > 0,
+		TrackedKeys:    len(r.limiters),
+		RequestsSeen:   r.requestsSeen,
+		LastCleanupAt:  r.lastCleanup,
+		RequestsPerMin: r.burst,
+	}
 }
 
 // SecurityHeaders adds security headers to responses.
