@@ -1,0 +1,30 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: tf-apply-tf-ai-lab
+  namespace: axiom-infra-jobs
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      serviceAccountName: terraform-runner
+      restartPolicy: Never
+      containers:
+        - name: terraform
+          image: hashicorp/terraform:1.8.5
+          command:
+            - sh
+            - -lc
+            - |
+              mkdir -p /tmp/work
+              cp /workspace/main.tf /tmp/work/main.tf
+              cd /tmp/work
+              terraform init
+              terraform apply -auto-approve
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+      volumes:
+        - name: workspace
+          configMap:
+            name: tf-apply-tf-ai-lab-config

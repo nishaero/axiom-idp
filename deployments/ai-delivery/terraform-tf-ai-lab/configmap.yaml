@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tf-apply-tf-ai-lab-config
+  namespace: axiom-infra-jobs
+data:
+  main.tf: |
+    terraform {
+      required_version = ">= 1.6.0"
+      required_providers {
+        kubernetes = {
+          source  = "hashicorp/kubernetes"
+          version = "~> 2.31"
+        }
+      }
+    }
+    provider "kubernetes" {
+      host                   = "https://kubernetes.default.svc"
+      token                  = file("/var/run/secrets/kubernetes.io/serviceaccount/token")
+      cluster_ca_certificate = file("/var/run/secrets/kubernetes.io/serviceaccount/ca.crt")
+    }
+    resource "kubernetes_namespace" "target" {
+      metadata {
+        name = "tf-ai-lab"
+        labels = {
+          "managed-by" = "terraform"
+          "axiom-idp"  = "true"
+        }
+      }
+    }
+    resource "kubernetes_config_map" "footprint" {
+      metadata {
+        name      = "terraform-footprint"
+        namespace = kubernetes_namespace.target.metadata[0].name
+      }
+      data = {
+        request = "tf-ai-lab"
+        provider = "terraform"
+      }
+    }
