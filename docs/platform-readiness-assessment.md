@@ -17,7 +17,7 @@ The current GitHub automation now includes:
 
 - A code quality gate that runs workflow linting, `go vet`, `golangci-lint`, and frontend type/lint checks.
 - Optional SonarQube/SonarCloud support when repo secrets and variables are configured.
-- Dependency review on pull requests.
+- Dependency review on pull requests, with a repo-local manifest hygiene fallback because GitHub dependency graph support is not enabled here.
 - Image publish validation with GHCR push, pull, and container smoke testing.
 - Branch-protection automation that can require the new quality and dependency checks.
 
