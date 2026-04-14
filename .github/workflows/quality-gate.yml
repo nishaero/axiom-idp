@@ -54,7 +54,7 @@ jobs:
 
       - name: Install frontend lint helpers
         working-directory: web
-        run: npm install --no-save eslint-plugin-react-hooks
+        run: npm install --no-save eslint-plugin-react-hooks eslint-plugin-react-refresh
 
       - name: Remove generated TypeScript artifacts
         run: find web/src -type f \( -name '*.js' -o -name '*.js.map' -o -name '*.d.ts' -o -name '*.d.ts.map' \) -delete

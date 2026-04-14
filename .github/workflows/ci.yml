@@ -62,7 +62,7 @@ jobs:
         working-directory: web
         run: |
           npm ci
-          npm install --no-save jsdom @testing-library/user-event eslint-plugin-react-hooks
+          npm install --no-save jsdom @testing-library/user-event eslint-plugin-react-hooks eslint-plugin-react-refresh
 
       - name: Remove generated TypeScript artifacts
         run: find web/src -type f \( -name '*.js' -o -name '*.js.map' -o -name '*.d.ts' -o -name '*.d.ts.map' \) -delete
