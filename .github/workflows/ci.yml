@@ -60,7 +60,9 @@ jobs:
 
       - name: Install dependencies
         working-directory: web
-        run: npm ci
+        run: |
+          npm ci
+          npm install --no-save jsdom @testing-library/user-event eslint-plugin-react-hooks
 
       - name: Remove generated TypeScript artifacts
         run: find web/src -type f \( -name '*.js' -o -name '*.js.map' -o -name '*.d.ts' -o -name '*.d.ts.map' \) -delete
