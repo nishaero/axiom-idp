@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: platform-lab-final
+  labels:
+    managed-by: argocd
+    axiom-idp: "true"
