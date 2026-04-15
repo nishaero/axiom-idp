@@ -34,7 +34,7 @@ FROM nginxinc/nginx-unprivileged:1.27-alpine AS runtime
 
 USER root
 
-RUN apk add --no-cache bash curl ca-certificates tzdata \
+RUN apk add --no-cache bash curl git kubectl ca-certificates tzdata \
     && mkdir -p /tmp/axiom /var/cache/nginx /var/run /var/lib/axiom \
     && chown -R 101:101 /tmp/axiom /var/cache/nginx /var/run /var/lib/axiom
 

@@ -80,6 +80,8 @@ type deploymentRecord struct {
 	SyncStatus        string         `json:"sync_status,omitempty"`
 	HealthStatus      string         `json:"health_status,omitempty"`
 	ExecutionState    string         `json:"execution_state,omitempty"`
+	JobID             string         `json:"job_id,omitempty"`
+	JobStatus         string         `json:"job_status,omitempty"`
 	ExecutionPlan     *executionPlan `json:"execution_plan,omitempty"`
 }
 
@@ -149,6 +151,26 @@ func (m *kubectlDeploymentManager) Apply(ctx context.Context, req deploymentAppl
 	record.ExecutionPlan = newDeploymentExecutionPlan("deployment_apply", spec)
 	record.ExecutionState = record.Phase
 	return record, nil
+}
+
+func queuedDeploymentRecord(req deploymentApplyRequest, intent string) *deploymentRecord {
+	record := &deploymentRecord{
+		Name:           req.Name,
+		Namespace:      req.Namespace,
+		Image:          req.Image,
+		Replicas:       req.Replicas,
+		Phase:          "queued",
+		ServiceType:    req.ServiceType,
+		Delivery:       req.Delivery,
+		Message:        fmt.Sprintf("Deployment request for %s has been accepted and queued for async execution.", req.Name),
+		ManifestName:   req.Name,
+		ExecutionState: "queued",
+		ExecutionPlan:  newDeploymentExecutionPlan(intent, req),
+	}
+	if record.ServiceType == "" {
+		record.ServiceType = "ClusterIP"
+	}
+	return record
 }
 
 func (m *kubectlDeploymentManager) Status(ctx context.Context, namespace, name string) (*deploymentRecord, error) {

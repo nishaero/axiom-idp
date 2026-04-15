@@ -46,6 +46,7 @@ type Config struct {
 	// AI
 	AIBackend   string
 	AIBaseURL   string
+	AIAPIKey    string
 	AIModel     string
 	AITimeout   time.Duration
 	AIMaxTokens int
@@ -64,6 +65,11 @@ type Config struct {
 	GitAuthorEmail   string
 	ArgoCDNamespace  string
 	ArgoCDProject    string
+
+	// Async orchestration
+	JobQueueSize   int
+	JobWorkerCount int
+	JobHistorySize int
 }
 
 // NewConfig creates configuration from environment variables
@@ -90,6 +96,7 @@ func NewConfig() *Config {
 		RateLimitWindow:          getEnvDuration("AXIOM_RATE_LIMIT_WINDOW", "1m"),
 		AIBackend:                strings.ToLower(strings.TrimSpace(getEnv("AXIOM_AI_BACKEND", "local"))),
 		AIBaseURL:                strings.TrimSpace(getEnv("AXIOM_AI_BASE_URL", "http://127.0.0.1:11434")),
+		AIAPIKey:                 strings.TrimSpace(getEnv("AXIOM_AI_API_KEY", "")),
 		AIModel:                  strings.TrimSpace(getEnv("AXIOM_AI_MODEL", "qwen3.5:9b")),
 		AITimeout:                getEnvDuration("AXIOM_AI_TIMEOUT", "90s"),
 		AIMaxTokens:              getEnvInt("AXIOM_AI_MAX_TOKENS", 768),
@@ -104,6 +111,9 @@ func NewConfig() *Config {
 		GitAuthorEmail:           strings.TrimSpace(getEnv("AXIOM_GIT_AUTHOR_EMAIL", "axiom-bot@users.noreply.github.com")),
 		ArgoCDNamespace:          strings.TrimSpace(getEnv("AXIOM_ARGOCD_NAMESPACE", "argocd")),
 		ArgoCDProject:            strings.TrimSpace(getEnv("AXIOM_ARGOCD_PROJECT", "default")),
+		JobQueueSize:             getEnvInt("AXIOM_JOB_QUEUE_SIZE", 32),
+		JobWorkerCount:           getEnvInt("AXIOM_JOB_WORKER_COUNT", 2),
+		JobHistorySize:           getEnvInt("AXIOM_JOB_HISTORY_SIZE", 50),
 	}
 }
 
@@ -133,8 +143,8 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("rate limit window must be positive")
 	}
 
-	if c.AIBackend != "local" && c.AIBackend != "ollama" {
-		return fmt.Errorf("ai backend must be one of: local, ollama")
+	if c.AIBackend != "local" && c.AIBackend != "ollama" && c.AIBackend != "openai" {
+		return fmt.Errorf("ai backend must be one of: local, ollama, openai")
 	}
 
 	if c.AITimeout < 1*time.Second {
@@ -145,6 +155,12 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("ai max tokens must be positive")
 	}
 
+	switch c.NormalizedDBDriver() {
+	case "", "sqlite", "postgres":
+	default:
+		return fmt.Errorf("invalid database driver: %s", c.DBDriver)
+	}
+
 	if c.KubernetesApplyTimeout > 0 && c.KubernetesApplyTimeout < 1*time.Second {
 		return fmt.Errorf("kubernetes apply timeout must be at least 1 second")
 	}
@@ -153,12 +169,18 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("kubernetes rollout timeout must be at least 1 second")
 	}
 
-	if c.AIBackend == "ollama" {
+	if c.AIBackend == "ollama" || c.AIBackend == "openai" {
 		if strings.TrimSpace(c.AIBaseURL) == "" {
-			return fmt.Errorf("ai base url must be set when ollama backend is enabled")
+			return fmt.Errorf("ai base url must be set when ai backend %q is enabled", c.AIBackend)
 		}
 		if strings.TrimSpace(c.AIModel) == "" {
-			return fmt.Errorf("ai model must be set when ollama backend is enabled")
+			return fmt.Errorf("ai model must be set when ai backend %q is enabled", c.AIBackend)
+		}
+	}
+
+	if c.AIBackend == "openai" {
+		if strings.TrimSpace(c.AIAPIKey) == "" {
+			return fmt.Errorf("ai api key must be set when openai backend is enabled")
 		}
 	}
 
@@ -176,6 +198,24 @@ func (c *Config) Validate() error {
 	}
 
 	return nil
+}
+
+// NormalizedDBDriver returns the runtime state driver normalized for internal use.
+func (c *Config) NormalizedDBDriver() string {
+	if c == nil {
+		return ""
+	}
+
+	switch strings.ToLower(strings.TrimSpace(c.DBDriver)) {
+	case "":
+		return ""
+	case "sqlite", "sqlite3":
+		return "sqlite"
+	case "postgres", "postgresql", "pgx":
+		return "postgres"
+	default:
+		return strings.ToLower(strings.TrimSpace(c.DBDriver))
+	}
 }
 
 // Helper functions

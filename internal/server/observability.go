@@ -36,6 +36,7 @@ type platformStatus struct {
 	Uptime             string                 `json:"uptime"`
 	AIBackend          string                 `json:"ai_backend"`
 	KubernetesNS       string                 `json:"kubernetes_namespace"`
+	RuntimeState       runtimeStateSummary    `json:"runtime_state"`
 	Checks             []statusCheck          `json:"checks"`
 	Alerts             []statusAlert          `json:"alerts"`
 	Overview           catalogOverview        `json:"overview"`
@@ -44,6 +45,7 @@ type platformStatus struct {
 	RecentAudit        []AuditLog             `json:"recent_audit"`
 	Audit              AuditStats             `json:"audit"`
 	RateLimiting       RateLimiterStats       `json:"rate_limiting"`
+	AsyncJobs          asyncJobStats          `json:"async_jobs"`
 	ObservabilityNotes []string               `json:"observability_notes"`
 }
 
@@ -63,11 +65,21 @@ type observabilityResponse struct {
 	Notes                 []string                `json:"notes"`
 }
 
+type runtimeStateSummary struct {
+	Backend   string `json:"backend"`
+	Shared    bool   `json:"shared"`
+	Status    string `json:"status"`
+	Message   string `json:"message"`
+	Driver    string `json:"driver"`
+	DriverURL string `json:"driver_url,omitempty"`
+}
+
 func (s *Server) buildPlatformStatus() platformStatus {
 	startedAt := s.startedAt
 	if startedAt.IsZero() {
 		startedAt = time.Now().UTC()
 	}
+	runtimeState := s.buildRuntimeStateSummary()
 
 	checks := []statusCheck{
 		{
@@ -89,6 +101,11 @@ func (s *Server) buildPlatformStatus() platformStatus {
 			Name:    "delivery",
 			Status:  statusReady,
 			Message: "Direct Kubernetes deployment and GitOps delivery paths are available.",
+		},
+		{
+			Name:    "runtime_state",
+			Status:  runtimeState.Status,
+			Message: runtimeState.Message,
 		},
 	}
 
@@ -135,6 +152,14 @@ func (s *Server) buildPlatformStatus() platformStatus {
 
 	status, readinessChecks := s.buildReadinessStatus()
 	checks = append(checks, readinessChecks...)
+	if s.jobs != nil {
+		jobStats := s.jobs.Stats()
+		checks = append(checks, statusCheck{
+			Name:    "async_jobs",
+			Status:  statusReady,
+			Message: fmt.Sprintf("Async job queue is online with %d workers, %d queued jobs, and %d active jobs.", jobStats.WorkerCount, jobStats.QueuedJobs, jobStats.ActiveJobs),
+		})
+	}
 	if status == statusReady {
 		for _, alert := range alerts {
 			if alert.Severity == "high" {
@@ -151,6 +176,7 @@ func (s *Server) buildPlatformStatus() platformStatus {
 		Uptime:       time.Since(startedAt).Round(time.Second).String(),
 		AIBackend:    s.config.AIBackend,
 		KubernetesNS: s.config.KubernetesNamespace,
+		RuntimeState: runtimeState,
 		Checks:       checks,
 		Alerts:       alerts,
 		Overview:     catalogSummary(demoCatalog),
@@ -159,10 +185,17 @@ func (s *Server) buildPlatformStatus() platformStatus {
 		RecentAudit:  s.auditor.GetLogs("", 12),
 		Audit:        s.auditor.Stats(),
 		RateLimiting: s.rateLimiter.Stats(),
+		AsyncJobs: func() asyncJobStats {
+			if s.jobs == nil {
+				return asyncJobStats{}
+			}
+			return s.jobs.Stats()
+		}(),
 		ObservabilityNotes: []string{
 			"Dashboard values marked live come from the backend platform status endpoint.",
 			"Prometheus and OpenTelemetry exporters are the next recommended step for production telemetry depth.",
 			"Release blockers are derived from ownership, evidence, and service health signals.",
+			"Runtime state is externalized when PostgreSQL is configured; SQLite remains a local fallback for development and single-instance runs.",
 		},
 	}
 }
@@ -188,6 +221,7 @@ func (s *Server) handleObservability(w http.ResponseWriter, r *http.Request) {
 			"Prometheus scrapes the /metrics endpoint directly; the UI shows a compact status snapshot from the control plane.",
 			"Readiness and liveness are exposed separately so minikube and production deployments can distinguish startup from health.",
 			"Telemetry counters are stored in-process for local and demo deployments; use shared storage if you need multi-replica durability.",
+			"Audit and rate-limiting state are backed by SQL when the database driver is configured for PostgreSQL or SQLite.",
 		},
 	}
 	if s.metrics != nil {
@@ -243,6 +277,12 @@ func buildObservabilityEndpoints(platformState string) []observabilityEndpoint {
 			Status:      platformTone,
 			Description: "Structured control-plane snapshot consumed by the dashboard and operator workflows.",
 		},
+		{
+			Name:        "Async job status API",
+			Path:        "/api/v1/jobs",
+			Status:      platformTone,
+			Description: "Lists queued and completed deployment and infrastructure jobs.",
+		},
 	}
 }
 
@@ -285,5 +325,69 @@ func (s *Server) buildReadinessStatus() (string, []statusCheck) {
 		Message: "AI backend configuration is present.",
 	})
 
+	runtimeState := s.buildRuntimeStateSummary()
+	checks = append(checks, statusCheck{
+		Name:    "runtime_state",
+		Status:  runtimeState.Status,
+		Message: runtimeState.Message,
+	})
+	if runtimeState.Status == statusUnready {
+		return statusUnready, checks
+	}
+
+	if runtimeState.Status == statusDegraded {
+		return statusDegraded, checks
+	}
+
 	return statusReady, checks
+}
+
+func (s *Server) buildRuntimeStateSummary() runtimeStateSummary {
+	if s == nil || s.config == nil {
+		return runtimeStateSummary{
+			Backend: "memory",
+			Status:  statusReady,
+			Message: "Runtime state defaults to in-memory fallback.",
+		}
+	}
+
+	driver := s.config.NormalizedDBDriver()
+	summary := runtimeStateSummary{
+		Backend:   "memory",
+		Shared:    false,
+		Status:    statusReady,
+		Driver:    driver,
+		DriverURL: strings.TrimSpace(s.config.DBURL),
+	}
+
+	switch driver {
+	case "postgres":
+		summary.Backend = "postgresql"
+		summary.Shared = true
+		summary.Status = statusReady
+		summary.Message = "Runtime state is externalized through PostgreSQL and shared across replicas."
+	case "sqlite":
+		summary.Backend = "sqlite"
+		summary.Shared = false
+		if strings.EqualFold(s.config.Environment, "production") {
+			summary.Status = statusDegraded
+			summary.Message = "Runtime state is file-backed SQLite. Use PostgreSQL for shared multi-replica HA state."
+		} else {
+			summary.Message = "Runtime state uses SQLite for local development and single-instance runs."
+		}
+	default:
+		if strings.EqualFold(s.config.Environment, "production") {
+			summary.Status = statusUnready
+			summary.Message = "Runtime state backend is not configured. Set AXIOM_DB_DRIVER to postgres for shared HA state."
+		} else {
+			summary.Message = "Runtime state falls back to in-memory storage for local development."
+		}
+	}
+
+	if s.stateStore != nil {
+		summary.Backend = s.stateStore.Backend()
+		summary.Shared = s.stateStore.Shared()
+	}
+
+	return summary
 }

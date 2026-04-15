@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/axiom-idp/axiom/internal/auth"
+	"github.com/sirupsen/logrus"
 )
 
 // AuditLog represents an audit log entry.
@@ -27,6 +28,8 @@ type Auditor struct {
 	mu      sync.RWMutex
 	logs    []AuditLog
 	metrics *Metrics
+	store   runtimeStateStore
+	logger  *logrus.Logger
 }
 
 type AuditStats struct {
@@ -55,6 +58,28 @@ func (a *Auditor) SetMetrics(metrics *Metrics) {
 	a.mu.Unlock()
 }
 
+// SetStore wires the audit subsystem into the shared runtime state store.
+func (a *Auditor) SetStore(store runtimeStateStore) {
+	if a == nil {
+		return
+	}
+
+	a.mu.Lock()
+	a.store = store
+	a.mu.Unlock()
+}
+
+// SetLogger wires warnings for store failures into the application logger.
+func (a *Auditor) SetLogger(logger *logrus.Logger) {
+	if a == nil {
+		return
+	}
+
+	a.mu.Lock()
+	a.logger = logger
+	a.mu.Unlock()
+}
+
 // Log records an audit log entry.
 func (a *Auditor) Log(ctx context.Context, userID, action, resource, status string, details map[string]interface{}) {
 	if a == nil {
@@ -74,7 +99,15 @@ func (a *Auditor) Log(ctx context.Context, userID, action, resource, status stri
 	a.mu.Lock()
 	a.logs = append(a.logs, entry)
 	metrics := a.metrics
+	store := a.store
+	logger := a.logger
 	a.mu.Unlock()
+
+	if store != nil {
+		if err := store.AppendAudit(ctx, entry); err != nil && logger != nil {
+			logger.WithError(err).Warn("failed to persist audit event to shared runtime state")
+		}
+	}
 
 	if metrics != nil {
 		metrics.RecordAudit(status)
@@ -100,7 +133,15 @@ func (a *Auditor) LogError(ctx context.Context, userID, action, resource string,
 	a.mu.Lock()
 	a.logs = append(a.logs, entry)
 	metrics := a.metrics
+	store := a.store
+	logger := a.logger
 	a.mu.Unlock()
+
+	if store != nil {
+		if err := store.AppendAudit(ctx, entry); err != nil && logger != nil {
+			logger.WithError(err).Warn("failed to persist audit error to shared runtime state")
+		}
+	}
 
 	if metrics != nil {
 		metrics.RecordAudit("error")
@@ -114,6 +155,17 @@ func (a *Auditor) GetLogs(userID string, limit int) []AuditLog {
 	}
 	if limit <= 0 {
 		limit = 100
+	}
+
+	a.mu.RLock()
+	store := a.store
+	a.mu.RUnlock()
+	if store != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		if logs, err := store.QueryAudit(ctx, userID, limit); err == nil {
+			return logs
+		}
 	}
 
 	a.mu.RLock()
@@ -171,6 +223,17 @@ func (a *Auditor) Middleware(next http.Handler) http.Handler {
 func (a *Auditor) Stats() AuditStats {
 	if a == nil {
 		return AuditStats{}
+	}
+
+	a.mu.RLock()
+	store := a.store
+	a.mu.RUnlock()
+	if store != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		if stats, err := store.AuditStats(ctx); err == nil {
+			return stats
+		}
 	}
 
 	a.mu.RLock()

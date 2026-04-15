@@ -43,6 +43,8 @@ type infrastructureRecord struct {
 	Artifacts       []string          `json:"artifacts,omitempty"`
 	Outputs         map[string]string `json:"outputs,omitempty"`
 	Inputs          map[string]string `json:"inputs,omitempty"`
+	JobID           string            `json:"job_id,omitempty"`
+	JobStatus       string            `json:"job_status,omitempty"`
 	ExecutionPlan   *executionPlan    `json:"execution_plan,omitempty"`
 }
 
@@ -311,13 +313,9 @@ type applicationStatus struct {
 }
 
 func (o *gitOpsOrchestrator) prepareGitOpsBranch(ctx context.Context, category, name string) (*gitOpsContext, error) {
-	repoURL := strings.TrimSpace(o.cfg.GitOpsRepoURL)
-	if repoURL == "" {
-		out, err := runCommand(ctx, "", "git", "config", "--get", "remote.origin.url")
-		if err != nil {
-			return nil, fmt.Errorf("failed to determine gitops repo url: %w", err)
-		}
-		repoURL = strings.TrimSpace(string(out))
+	repoURL, err := o.resolveGitOpsRepoURL(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	repoHTTPS := normalizeGitHubRepoURL(repoURL)
@@ -356,6 +354,38 @@ func (o *gitOpsOrchestrator) prepareGitOpsBranch(ctx context.Context, category, 
 		LocalDir:        localDir,
 		ApplicationName: buildApplicationName(category, name),
 	}, nil
+}
+
+func (o *gitOpsOrchestrator) resolveGitOpsRepoURL(ctx context.Context) (string, error) {
+	if o != nil && o.cfg != nil {
+		if repoURL := strings.TrimSpace(o.cfg.GitOpsRepoURL); repoURL != "" {
+			return repoURL, nil
+		}
+	}
+
+	if repoURL := strings.TrimSpace(os.Getenv("AXIOM_GITOPS_REPO_URL")); repoURL != "" {
+		return repoURL, nil
+	}
+
+	githubRepo := strings.TrimSpace(os.Getenv("GITHUB_REPOSITORY"))
+	if githubRepo != "" {
+		serverURL := strings.TrimSpace(os.Getenv("GITHUB_SERVER_URL"))
+		if serverURL == "" {
+			serverURL = "https://github.com"
+		}
+		return strings.TrimRight(serverURL, "/") + "/" + strings.TrimPrefix(githubRepo, "/") + ".git", nil
+	}
+
+	out, err := runCommand(ctx, "", "git", "config", "--get", "remote.origin.url")
+	if err != nil {
+		return "", fmt.Errorf("failed to determine gitops repo url: %w", err)
+	}
+	repoURL := strings.TrimSpace(string(out))
+	if repoURL == "" {
+		return "", errors.New("gitops repo url is empty")
+	}
+
+	return repoURL, nil
 }
 
 func (o *gitOpsOrchestrator) commitAndPush(ctx context.Context, gitCtx *gitOpsContext, message string) error {
@@ -402,7 +432,7 @@ spec:
       - CreateNamespace=true
 `, gitCtx.ApplicationName, argoNS, project, gitCtx.RepoHTTPSURL, gitCtx.Branch, gitCtx.Path, destinationNamespace)
 
-	cmd := exec.CommandContext(ctx, "kubectl", "apply", "-f", "-")
+	cmd := exec.CommandContext(ctx, "kubectl", "apply", "--validate=false", "-f", "-")
 	cmd.Stdin = strings.NewReader(manifest)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -745,6 +775,24 @@ spec:
 	}
 }
 
+func queuedInfrastructureRecord(req infrastructureApplyRequest, intent string) *infrastructureRecord {
+	return &infrastructureRecord{
+		Name:            req.Name,
+		Provider:        req.Provider,
+		TargetNamespace: req.TargetNamespace,
+		Phase:           "queued",
+		Message:         fmt.Sprintf("%s infrastructure request for %s has been accepted and queued for async execution.", strings.Title(req.Provider), req.TargetNamespace),
+		Executed:        false,
+		ExecutionState:  "queued",
+		RepoURL:         "",
+		Revision:        "",
+		Path:            "",
+		ApplicationName: "",
+		Inputs:          req.Inputs,
+		ExecutionPlan:   newInfrastructureExecutionPlan(intent, req),
+	}
+}
+
 func indentYAMLMap(values map[string]string, spaces int) string {
 	indent := strings.Repeat(" ", spaces)
 	if len(values) == 0 {
@@ -773,6 +821,28 @@ func writeFiles(dir string, files map[string]string) error {
 }
 
 func runCommand(ctx context.Context, dir string, name string, args ...string) ([]byte, error) {
+	if name == "kubectl" {
+		if host := strings.TrimSpace(os.Getenv("KUBERNETES_SERVICE_HOST")); host != "" {
+			port := strings.TrimSpace(os.Getenv("KUBERNETES_SERVICE_PORT_HTTPS"))
+			if port == "" {
+				port = strings.TrimSpace(os.Getenv("KUBERNETES_SERVICE_PORT"))
+			}
+			if port == "" {
+				port = "443"
+			}
+			if tokenBytes, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/token"); err == nil {
+				caPath := "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+				if _, err := os.Stat(caPath); err == nil {
+					args = append([]string{
+						"--server=https://" + host + ":" + port,
+						"--token=" + strings.TrimSpace(string(tokenBytes)),
+						"--certificate-authority=" + caPath,
+					}, args...)
+				}
+			}
+		}
+	}
+
 	cmd := exec.CommandContext(ctx, name, args...)
 	if dir != "" {
 		cmd.Dir = dir

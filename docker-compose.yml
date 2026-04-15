@@ -14,8 +14,8 @@ services:
       AXIOM_PORT: 8081
       AXIOM_ENV: ${AXIOM_ENV:-production}
       AXIOM_LOG_LEVEL: ${AXIOM_LOG_LEVEL:-info}
-      AXIOM_DB_DRIVER: sqlite3
-      AXIOM_DB_URL: file:/var/lib/axiom/axiom.db
+      AXIOM_DB_DRIVER: ${AXIOM_DB_DRIVER:-sqlite3}
+      AXIOM_DB_URL: ${AXIOM_DB_URL:-file:/var/lib/axiom/axiom.db}
       AXIOM_SESSION_SECRET: ${AXIOM_SESSION_SECRET:?AXIOM_SESSION_SECRET must be set}
       AXIOM_RATE_LIMIT_REQUESTS: ${AXIOM_RATE_LIMIT_REQUESTS:-1000}
       AXIOM_RATE_LIMIT_WINDOW: ${AXIOM_RATE_LIMIT_WINDOW:-1m}

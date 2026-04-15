@@ -21,10 +21,12 @@ docker compose down -v
 
 ## AI Runtime Modes
 
-- Local fallback mode: `AXIOM_AI_BACKEND=local` uses the embedded assistant and does not require Ollama.
-- Ollama mode: `AXIOM_AI_BACKEND=ollama` sends requests to a reachable Ollama endpoint and falls back to local mode if the upstream call fails.
+- Local fallback mode: `AXIOM_AI_BACKEND=local` uses the embedded assistant and does not require an external provider.
+- Ollama mode: `AXIOM_AI_BACKEND=ollama` sends OpenAI-compatible chat-completions requests to a reachable Ollama endpoint.
+- OpenAI-compatible mode: `AXIOM_AI_BACKEND=openai` sends the same request shape to another compatible endpoint and requires `AXIOM_AI_API_KEY`.
+- If the upstream call fails or returns an empty response, Axiom falls back to local mode and marks the backend as `local-fallback`.
 
-Example for a local Ollama service on the host:
+Example for a local provider on the host:
 
 ```bash
 AXIOM_AI_BACKEND=ollama \
@@ -43,7 +45,7 @@ docker compose up -d --build
 
 ## Kubernetes Deployment
 
-The Kubernetes manifest defaults to local fallback mode. Patch the `AXIOM_AI_*` settings before rollout if you want to use Ollama instead.
+The Kubernetes manifest defaults to local fallback mode. Patch the `AXIOM_AI_*` settings before rollout if you want to use an Ollama or other OpenAI-compatible provider.
 
 ```bash
 # Apply Kubernetes manifests
@@ -105,14 +107,15 @@ The bootstrap script assumes the following checks exist in GitHub Actions:
 | AXIOM_PORT | Server port | 8081 |
 | AXIOM_ENV | Environment (development/production) | development |
 | AXIOM_LOG_LEVEL | Log level (debug/info/warn/error) | info |
-| AXIOM_DB_DRIVER | Database driver | sqlite3 |
-| AXIOM_DB_URL | Database connection string | file:axiom.db |
+| AXIOM_DB_DRIVER | Runtime state driver (`sqlite3` for local runs, `postgres` for shared HA state) | sqlite3 |
+| AXIOM_DB_URL | Runtime state connection string (`file:axiom.db` locally, `postgres://...` in production) | file:axiom.db |
 | AXIOM_SESSION_SECRET | Session secret (change in production) | REPLACE_WITH_A_LONG_RANDOM_SECRET |
-| AXIOM_AI_BACKEND | AI mode (`local` or `ollama`) | local |
-| AXIOM_AI_BASE_URL | Ollama base URL | http://127.0.0.1:11434 |
-| AXIOM_AI_MODEL | Ollama model name | qwen3.5:9b |
+| AXIOM_AI_BACKEND | AI mode (`local`, `ollama`, or `openai`) | local |
+| AXIOM_AI_BASE_URL | OpenAI-compatible base URL | http://127.0.0.1:11434 |
+| AXIOM_AI_API_KEY | API key for `openai` mode | empty |
+| AXIOM_AI_MODEL | OpenAI-compatible model name | qwen3.5:9b |
 | AXIOM_AI_TIMEOUT | AI request timeout | 90s |
-| AXIOM_AI_MAX_TOKENS | Ollama generation limit | 768 |
+| AXIOM_AI_MAX_TOKENS | Generation limit | 768 |
 
 ## Volumes
 
@@ -127,11 +130,14 @@ The bootstrap script assumes the following checks exist in GitHub Actions:
 For production, you should:
 
 1. Change `AXIOM_SESSION_SECRET` to a strong random value
-2. Decide whether the deployment uses local fallback mode or Ollama mode and set the matching `AXIOM_AI_*` variables
-3. Configure TLS/HTTPS
-4. Set up proper RBAC and authentication
-5. Use resource limits
-6. Enable audit logging
-7. Pull images from GitHub Container Registry (`ghcr.io/axiom-idp/axiom`)
+2. Decide whether the deployment uses local fallback mode, Ollama mode, or another OpenAI-compatible provider and set the matching `AXIOM_AI_*` variables
+3. Set `AXIOM_DB_DRIVER=postgres` and point `AXIOM_DB_URL` at a shared PostgreSQL instance for multi-replica audit and rate-limit state
+4. Configure TLS/HTTPS
+5. Set up proper RBAC and authentication
+6. Use resource limits
+7. Enable audit logging
+8. Pull images from GitHub Container Registry (`ghcr.io/axiom-idp/axiom`)
+
+Note: async deployment and infrastructure jobs are currently handled by the running process, so job state is not shared across replicas yet.
 
 See `docs/` for more information.

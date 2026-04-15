@@ -125,7 +125,11 @@ func populateArgoDeploymentPlan(plan actionPlan, queryResult catalogQueryResult,
 	plan.Title = "AI-guided GitOps rollout"
 	plan.ExecutionPath = "Axiom intent -> GitHub branch -> Argo CD application -> Kubernetes rollout"
 	if deployment != nil {
-		plan.Summary = fmt.Sprintf("%s is routed through GitHub and Argo CD so the rollout stays reviewable and observable.", deployment.Name)
+		if isQueuedExecution(deployment.ExecutionState, deployment.Phase) {
+			plan.Summary = fmt.Sprintf("%s has been accepted and queued through GitHub and Argo CD.", deployment.Name)
+		} else {
+			plan.Summary = fmt.Sprintf("%s is routed through GitHub and Argo CD so the rollout stays reviewable and observable.", deployment.Name)
+		}
 		plan.Steps = []actionPlanStep{
 			{
 				Name:   "Intent normalized",
@@ -137,7 +141,7 @@ func populateArgoDeploymentPlan(plan actionPlan, queryResult catalogQueryResult,
 			{
 				Name:   "GitHub delivery branch",
 				Status: planStatusForPhase(deployment.Phase),
-				Detail: fmt.Sprintf("Branch %s and path %s track the desired state for the rollout.", fallbackString(deployment.Revision, "generated"), fallbackString(deployment.Path, "deployments/ai-delivery")),
+				Detail: queuedOrLiveDetail(deployment.ExecutionState, fmt.Sprintf("Branch %s and path %s track the desired state for the rollout.", fallbackString(deployment.Revision, "generated"), fallbackString(deployment.Path, "deployments/ai-delivery")), "The job is queued and the delivery branch will be created by the worker."),
 				Owner:  "GitHub",
 				Why:    "Operators can audit and reproduce the exact desired state.",
 			},
@@ -158,7 +162,7 @@ func populateArgoDeploymentPlan(plan actionPlan, queryResult catalogQueryResult,
 	plan.OutcomePreview = append(plan.OutcomePreview, actionPlanItem{
 		Label:  "Delivery result",
 		Status: normalizePlanState(fallbackString(deployment.Phase, "watch")),
-		Detail: fmt.Sprintf("Expected operator experience: ask for a rollout, inspect the branch/application trail, then confirm live status from the same workspace."),
+		Detail: queuedOrLiveDetail(deployment.ExecutionState, "Expected operator experience: ask for a rollout, inspect the branch/application trail, then confirm live status from the same workspace.", "Expected operator experience: the job is queued and the worker will publish the final rollout trail."),
 	})
 	return plan
 }
@@ -194,12 +198,16 @@ func populateDirectDeploymentPlan(plan actionPlan, queryResult catalogQueryResul
 	plan.Title = "AI-guided direct deployment"
 	plan.ExecutionPath = "Axiom intent -> Kubernetes deployment manager -> rollout verification"
 	if deployment != nil {
-		plan.Summary = fmt.Sprintf("%s was applied directly to Kubernetes and then verified through rollout status.", deployment.Name)
+		if isQueuedExecution(deployment.ExecutionState, deployment.Phase) {
+			plan.Summary = fmt.Sprintf("%s has been accepted and queued for Kubernetes deployment execution.", deployment.Name)
+		} else {
+			plan.Summary = fmt.Sprintf("%s was applied directly to Kubernetes and then verified through rollout status.", deployment.Name)
+		}
 		plan.Steps = []actionPlanStep{
 			{
 				Name:   "Deployment spec prepared",
 				Status: "completed",
-				Detail: fmt.Sprintf("The request was normalized to image %s with service type %s.", deployment.Image, fallbackString(deployment.ServiceType, "ClusterIP")),
+				Detail: queuedOrLiveDetail(deployment.ExecutionState, fmt.Sprintf("The request was normalized to image %s with service type %s.", deployment.Image, fallbackString(deployment.ServiceType, "ClusterIP")), "The request is queued and will be normalized by the worker."),
 				Owner:  "Axiom",
 				Why:    "Developers can request a deployment without hand-authoring manifests.",
 			},
@@ -244,12 +252,16 @@ func populateInfrastructurePlan(plan actionPlan, queryResult catalogQueryResult,
 	plan.Title = "AI-guided infrastructure request"
 	plan.ExecutionPath = "Axiom intent -> GitHub delivery artifacts -> Argo CD and selected infra engine"
 	if infrastructure != nil {
-		plan.Summary = fmt.Sprintf("%s infrastructure for %s is routed through the %s path.", strings.Title(infrastructure.Provider), infrastructure.TargetNamespace, strings.Title(infrastructure.Provider))
+		if isQueuedExecution(infrastructure.ExecutionState, infrastructure.Phase) {
+			plan.Summary = fmt.Sprintf("%s infrastructure for %s has been accepted and queued for async execution.", strings.Title(infrastructure.Provider), infrastructure.TargetNamespace)
+		} else {
+			plan.Summary = fmt.Sprintf("%s infrastructure for %s is routed through the %s path.", strings.Title(infrastructure.Provider), infrastructure.TargetNamespace, strings.Title(infrastructure.Provider))
+		}
 		plan.Steps = []actionPlanStep{
 			{
 				Name:   "Infrastructure intent normalized",
 				Status: "completed",
-				Detail: fmt.Sprintf("The request targets namespace %s using %s.", infrastructure.TargetNamespace, strings.Title(infrastructure.Provider)),
+				Detail: queuedOrLiveDetail(infrastructure.ExecutionState, fmt.Sprintf("The request targets namespace %s using %s.", infrastructure.TargetNamespace, strings.Title(infrastructure.Provider)), "The request is queued and will be normalized by the worker."),
 				Owner:  "Axiom",
 				Why:    "AI reduces form-filling and routing complexity for platform consumers.",
 			},
@@ -290,9 +302,28 @@ func populateInfrastructurePlan(plan actionPlan, queryResult catalogQueryResult,
 	plan.OutcomePreview = append(plan.OutcomePreview, actionPlanItem{
 		Label:  "Platform outcome",
 		Status: normalizePlanState(fallbackString(infrastructure.Phase, "watch")),
-		Detail: "Infrastructure should feel request-driven to developers while staying reviewable and operator-controlled for the platform team.",
+		Detail: queuedOrLiveDetail(infrastructure.ExecutionState, "Infrastructure should feel request-driven to developers while staying reviewable and operator-controlled for the platform team.", "Infrastructure is queued and will be reconciled by the worker."),
 	})
 	return plan
+}
+
+func isQueuedExecution(state, phase string) bool {
+	switch strings.ToLower(strings.TrimSpace(state)) {
+	case "queued", "pending":
+		return true
+	}
+	switch strings.ToLower(strings.TrimSpace(phase)) {
+	case "queued", "pending":
+		return true
+	}
+	return false
+}
+
+func queuedOrLiveDetail(state, liveDetail, queuedDetail string) string {
+	if isQueuedExecution(state, "") {
+		return queuedDetail
+	}
+	return liveDetail
 }
 
 func populateAdvisoryPlan(plan actionPlan, queryResult catalogQueryResult) actionPlan {

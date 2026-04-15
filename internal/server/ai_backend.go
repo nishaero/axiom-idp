@@ -29,8 +29,10 @@ type aiQueryRequest struct {
 
 type localAIBackend struct{}
 
-type ollamaAIBackend struct {
+type openAICompatibleBackend struct {
+	backend   string
 	baseURL   string
+	apiKey    string
 	model     string
 	maxTokens int
 	client    *http.Client
@@ -41,9 +43,11 @@ func newAIBackend(cfg *config.Config, logger *logrus.Logger) aiBackend {
 		return localAIBackend{}
 	}
 
-	if strings.EqualFold(cfg.AIBackend, "ollama") {
-		return &ollamaAIBackend{
+	if strings.EqualFold(cfg.AIBackend, "ollama") || strings.EqualFold(cfg.AIBackend, "openai") {
+		return &openAICompatibleBackend{
+			backend:   strings.ToLower(strings.TrimSpace(cfg.AIBackend)),
 			baseURL:   strings.TrimRight(cfg.AIBaseURL, "/"),
+			apiKey:    strings.TrimSpace(cfg.AIAPIKey),
 			model:     cfg.AIModel,
 			maxTokens: cfg.AIMaxTokens,
 			client: &http.Client{
@@ -113,64 +117,76 @@ func (localAIBackend) Query(ctx context.Context, request aiQueryRequest) (string
 	}
 }
 
-func (o *ollamaAIBackend) Query(ctx context.Context, request aiQueryRequest) (string, string, error) {
+func (o *openAICompatibleBackend) Query(ctx context.Context, request aiQueryRequest) (string, string, error) {
 	if strings.TrimSpace(request.Query) == "" {
-		return "", "ollama", nil
+		return "", o.backend, nil
 	}
 
-	prompt := buildOllamaPrompt(request)
+	prompt := buildOpenAICompatiblePrompt(request)
 	body := map[string]interface{}{
-		"model":  o.model,
-		"prompt": prompt,
-		"stream": false,
-		"think":  false,
-		"options": map[string]interface{}{
-			"temperature": 0.2,
-			"num_predict": o.maxTokens,
+		"model": o.model,
+		"messages": []map[string]string{
+			{
+				"role":    "system",
+				"content": "You are Axiom IDP's production operations assistant. Answer concisely, ground responses in provided structured analysis, and prioritize release readiness, ownership, compliance evidence, observability, and operational next steps.",
+			},
+			{
+				"role":    "user",
+				"content": prompt,
+			},
 		},
+		"temperature": 0.2,
+		"max_tokens":  o.maxTokens,
+		"stream":      false,
 	}
 
 	payload, err := json.Marshal(body)
 	if err != nil {
-		return "", "ollama", err
+		return "", o.backend, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, o.baseURL+"/api/generate", bytes.NewReader(payload))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, openAICompatibleChatCompletionsURL(o.baseURL), bytes.NewReader(payload))
 	if err != nil {
-		return "", "ollama", err
+		return "", o.backend, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if o.apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+o.apiKey)
+	}
 
 	resp, err := o.client.Do(req)
 	if err != nil {
-		return "", "ollama", err
+		return "", o.backend, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", "ollama", fmt.Errorf("ollama returned status %d", resp.StatusCode)
+		return "", o.backend, fmt.Errorf("%s-compatible endpoint returned status %d", o.backend, resp.StatusCode)
 	}
 
 	var result struct {
-		Response string `json:"response"`
-		Thinking string `json:"thinking"`
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", "ollama", err
+		return "", o.backend, err
 	}
 
-	answer := strings.TrimSpace(result.Response)
+	answer := ""
+	if len(result.Choices) > 0 {
+		answer = strings.TrimSpace(result.Choices[0].Message.Content)
+	}
 	if answer == "" {
-		if strings.TrimSpace(result.Thinking) != "" {
-			return "", "ollama", fmt.Errorf("ollama returned only thinking output")
-		}
-		return "", "ollama", fmt.Errorf("ollama returned an empty response")
+		return "", o.backend, fmt.Errorf("%s-compatible endpoint returned an empty response", o.backend)
 	}
 
-	return answer, "ollama", nil
+	return answer, o.backend, nil
 }
 
-func buildOllamaPrompt(request aiQueryRequest) string {
+func buildOpenAICompatiblePrompt(request aiQueryRequest) string {
 	var serviceLines []string
 	for _, service := range request.Services {
 		serviceLines = append(serviceLines, fmt.Sprintf("- %s | owner=%s | team=%s | status=%s | tier=%s | dependencies=%s", service.Name, service.Owner, service.Team, service.Status, service.Tier, strings.Join(service.Dependencies, ", ")))
@@ -208,6 +224,17 @@ Instructions:
 
 User question:
 %s`, fallbackUser(request.UserID), strings.Join(defaultIfEmpty(request.Roles, []string{"viewer"}), ", "), string(reportJSON), strings.Join(serviceLines, "\n"), strings.TrimSpace(request.Query))
+}
+
+func openAICompatibleChatCompletionsURL(baseURL string) string {
+	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	if strings.HasSuffix(baseURL, "/chat/completions") {
+		return baseURL
+	}
+	if strings.HasSuffix(baseURL, "/v1") {
+		return baseURL + "/chat/completions"
+	}
+	return baseURL + "/v1/chat/completions"
 }
 
 func fallbackUser(userID string) string {

@@ -42,10 +42,11 @@ Backend:
 - security headers, audit logging, and rate limiting
 - `/live`, `/ready`, `/health`, and `/api/v1/platform/status`
 - `/metrics` Prometheus-style telemetry export and `/api/v1/platform/observability`
-- catalog overview, service analysis, and AI query endpoints
+- catalog overview, service analysis, and AI query endpoints using an OpenAI-compatible request path with Ollama as the local provider option
 - direct Kubernetes deployment flow
 - GitHub-backed Argo CD deployment flow
 - Terraform-backed infrastructure request flow through GitOps execution
+- async deployment and infrastructure jobs with `/api/v1/jobs` and `/api/v1/jobs/{id}`
 
 Frontend:
 
@@ -86,8 +87,9 @@ The goal is not to replicate generic portal products. The differentiator is the 
 The branch is ready for controlled launch, but these items are still outside the current validated baseline:
 
 - formal BSI C5 certification
-- full HA architecture with externalized state
+- full HA architecture with externalized state for every runtime subsystem
 - complete Crossplane execution validation
+- durable async job orchestration across replicas
 - full observability stack with Prometheus/OpenTelemetry/Grafana
 - browser-driven E2E automation for all UI journeys
 

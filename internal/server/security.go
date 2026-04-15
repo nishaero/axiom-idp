@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"net"
 	"net/http"
 	"strings"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"github.com/axiom-idp/axiom/internal/auth"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/time/rate"
 )
 
@@ -17,11 +19,14 @@ type RateLimiter struct {
 	limiters         map[string]*rateEntry
 	rate             rate.Limit
 	burst            int
+	window           time.Duration
 	staleAfter       time.Duration
 	lastCleanup      time.Time
 	requestsSeen     int
 	cleanupThreshold int
 	metrics          *Metrics
+	store            runtimeStateStore
+	logger           *logrus.Logger
 }
 
 type RateLimiterStats struct {
@@ -49,6 +54,7 @@ func NewRateLimiter(requests int, window time.Duration) *RateLimiter {
 		limiters:         make(map[string]*rateEntry),
 		rate:             rate.Limit(float64(requests) / window.Seconds()),
 		burst:            requests,
+		window:           window,
 		staleAfter:       window * 2,
 		cleanupThreshold: requests,
 	}
@@ -65,6 +71,28 @@ func (r *RateLimiter) SetMetrics(metrics *Metrics) {
 	r.mu.Unlock()
 }
 
+// SetStore wires the rate limiter into the shared runtime state store.
+func (r *RateLimiter) SetStore(store runtimeStateStore) {
+	if r == nil {
+		return
+	}
+
+	r.mu.Lock()
+	r.store = store
+	r.mu.Unlock()
+}
+
+// SetLogger wires store warnings into the application logger.
+func (r *RateLimiter) SetLogger(logger *logrus.Logger) {
+	if r == nil {
+		return
+	}
+
+	r.mu.Lock()
+	r.logger = logger
+	r.mu.Unlock()
+}
+
 // Allow checks whether the provided key can make a request.
 func (r *RateLimiter) Allow(key string) bool {
 	if key == "" {
@@ -72,6 +100,23 @@ func (r *RateLimiter) Allow(key string) bool {
 	}
 	if r == nil || r.rate <= 0 || r.burst <= 0 {
 		return true
+	}
+
+	r.mu.Lock()
+	store := r.store
+	logger := r.logger
+	r.mu.Unlock()
+
+	if store != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		allowed, err := store.AllowRateLimit(ctx, key, r.burst, r.window)
+		cancel()
+		if err == nil {
+			return allowed
+		}
+		if logger != nil {
+			logger.WithError(err).Warn("failed to evaluate shared runtime rate limit; falling back to local limiter")
+		}
 	}
 
 	r.mu.Lock()
@@ -168,6 +213,20 @@ func (r *RateLimiter) Middleware(next http.Handler) http.Handler {
 func (r *RateLimiter) Stats() RateLimiterStats {
 	if r == nil {
 		return RateLimiterStats{}
+	}
+
+	r.mu.Lock()
+	store := r.store
+	ratePerMin := r.burst
+	r.mu.Unlock()
+	if store != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		if stats, err := store.RateLimitStats(ctx); err == nil {
+			stats.Enabled = r.rate > 0 && r.burst > 0
+			stats.RequestsPerMin = ratePerMin
+			return stats
+		}
 	}
 
 	r.mu.Lock()

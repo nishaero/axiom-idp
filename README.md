@@ -9,7 +9,7 @@
 <div align="center">
   <img src="docs/assets/axiom-logo.svg" alt="Axiom IDP Logo" width="200" style="border-radius: 12px;" />
   <br>
-  <strong>Stateless, MCP-Native Internal Developer Platform with AI-First Design</strong>
+  <strong>AI-Assisted Internal Developer Platform for Release Readiness and GitOps Delivery</strong>
   <br>
   <a href="https://github.com/nishaero/axiom-idp/releases/latest">Download Latest Release</a>
   <br><br>
@@ -21,17 +21,18 @@
 
 ## 🎯 Overview
 
-Axiom is an AI-native internal developer platform focused on release readiness, GitOps delivery, and compliance-aware operations. It combines deterministic backend analysis with local or Ollama-backed AI guidance, GitHub-native SDLC automation, and deployment flows that can act directly on Kubernetes or through GitOps with Argo CD.
+Axiom is an AI-native internal developer platform focused on release readiness, GitOps delivery, and compliance-aware operations. It combines deterministic backend analysis with an OpenAI-compatible AI request path, local guidance from providers such as Ollama, GitHub-native SDLC automation, and deployment flows that can act directly on Kubernetes or through GitOps with Argo CD.
 
 ### AI Runtime Modes
 
-- `AXIOM_AI_BACKEND=local` is the default and works without Ollama.
-- `AXIOM_AI_BACKEND=ollama` sends prompts to a reachable Ollama server.
-- If Ollama fails or returns an empty response, the request falls back to local mode and the API marks the backend as `local-fallback`.
+- `AXIOM_AI_BACKEND=local` is the default and works without an external AI provider.
+- `AXIOM_AI_BACKEND=ollama` sends OpenAI-compatible chat-completions requests to a reachable Ollama endpoint.
+- `AXIOM_AI_BACKEND=openai` sends the same request shape to another compatible endpoint and requires `AXIOM_AI_API_KEY`.
+- If the external provider fails or returns an empty response, the request falls back to local mode and the API marks the backend as `local-fallback`.
 
 ### ✨ Key Features
 
-- **AI-Native Architecture**: Deterministic platform analysis with local or Ollama-backed AI guidance
+- **AI-Native Architecture**: Deterministic platform analysis with local or OpenAI-compatible AI guidance
 - **GitOps Delivery**: AI can trigger direct Kubernetes deploys or GitHub-backed Argo CD delivery flows with explicit execution plans
 - **Infrastructure Workflows**: Terraform-backed infrastructure requests run through GitHub and Argo CD, while Crossplane requests are staged with controller-dependent execution notes
 - **Release Briefs**: exportable evidence-native operator briefs with next-best-action guidance and missing-evidence cues
@@ -52,7 +53,7 @@ Axiom is an AI-native internal developer platform focused on release readiness, 
 - Go 1.24+
 - Node.js 24+ and npm
 - Docker and Docker Compose v2
-- Optional: Ollama reachable from the deployment target if you want the AI-backed mode
+- Optional: an OpenAI-compatible local provider such as Ollama reachable from the deployment target if you want the AI-backed mode
 
 ### Installation
 
@@ -85,12 +86,18 @@ AXIOM_ENV=production
 AXIOM_LOG_LEVEL=info
 AXIOM_SESSION_SECRET=replace-with-a-long-random-secret
 AXIOM_AI_BACKEND=local
+# Local Ollama-compatible provider:
 # AXIOM_AI_BACKEND=ollama
 # AXIOM_AI_BASE_URL=http://host.docker.internal:11434
 # AXIOM_AI_MODEL=qwen3.5:9b
+# Cloud-compatible provider:
+# AXIOM_AI_BACKEND=openai
+# AXIOM_AI_BASE_URL=https://api.example.com/v1
+# AXIOM_AI_API_KEY=replace-with-a-real-key
+# AXIOM_AI_MODEL=gpt-4.1-mini
 ```
 
-For Ollama-backed runs, start Ollama separately and pull the target model before starting Axiom:
+For local provider runs, start Ollama separately and make sure the target model is available before starting Axiom. Axiom sends OpenAI-compatible chat-completions requests to the configured base URL:
 
 ```bash
 ollama pull qwen3.5:9b
@@ -106,8 +113,10 @@ AXIOM_AI_BACKEND=local ./bin/axiom-server
 # Or with Docker Compose
 docker compose up -d --build
 
-# Or with Ollama on your machine
+# Or with a local Ollama-compatible provider on your machine
 AXIOM_AI_BACKEND=ollama AXIOM_AI_BASE_URL=http://host.docker.internal:11434 docker compose up -d --build
+# Or with a cloud-compatible provider
+# AXIOM_AI_BACKEND=openai AXIOM_AI_API_KEY=replace-with-a-real-key AXIOM_AI_BASE_URL=https://api.example.com/v1 docker compose up -d --build
 ```
 
 Visit `http://localhost:8080` in your browser.
@@ -119,6 +128,7 @@ Visit `http://localhost:8080` in your browser.
 - `/health` returns platform health summary
 - `/api/v1/platform/status` returns backend-fed operational status used by the dashboard
 - `/api/v1/platform/observability` returns the live observability snapshot used by the operator view
+- `/api/v1/jobs` and `/api/v1/jobs/{id}` return async job state for deployment and infrastructure requests
 - `/metrics` exposes Prometheus-style application metrics
 
 ---
@@ -237,7 +247,7 @@ See [SECURITY.md](SECURITY.md) for:
 - **Audit Logging**: Comprehensive request/response logging
 - **Rate Limiting**: API rate limiting and protection
 - **CORS Protection**: Configurable CORS policies
-- **HTTPS Enforcement**: TLS 1.3 with modern ciphers
+- **HTTPS/TLS**: terminate TLS 1.3 with modern ciphers at the edge
 
 ## 🤖 GitHub Governance
 
@@ -288,14 +298,15 @@ go tool cover -html=coverage.out -o coverage.html
 
 ## 📊 Monitoring & Observability
 
-Axiom includes comprehensive observability features:
+Axiom includes the following observability surfaces:
 
-- **Health Check**: `/health` endpoint for liveness/readiness
+- **Health**: `/live`, `/ready`, and `/health`
 - **Metrics**: Prometheus metrics at `/metrics`
-- **Tracing**: OpenTelemetry integration ready
-- **Logs**: Structured logging to JSON
-- **Audit**: Request/response audit logs
-- **Alerts**: Webhook notifications for critical events
+- **Tracing**: request traces are correlated through generated trace IDs; a full OpenTelemetry backend remains a recommended next step
+- **Logs**: structured logging to JSON
+- **Audit**: request and response audit logs
+- **Runtime State**: SQL-backed audit and rate-limit state, with SQLite for local/single-node runs and PostgreSQL for shared HA deployments
+- **Alerts**: blocking signals are exposed in platform status and the observability view
 
 ---
 

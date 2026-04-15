@@ -75,6 +75,17 @@ func TestObservabilityEndpointAndMetricsExport(t *testing.T) {
 	if !ok {
 		t.Fatalf("Expected telemetry snapshot, got %v", observabilityResp)
 	}
+	platform, ok := observabilityResp["platform"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("Expected platform snapshot, got %v", observabilityResp)
+	}
+	runtimeState, ok := platform["runtime_state"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("Expected runtime state summary, got %v", platform)
+	}
+	if runtimeState["backend"] == "" {
+		t.Fatalf("Expected runtime state backend, got %v", runtimeState)
+	}
 	if telemetry["http_requests_total"] == nil || telemetry["ai_requests_total"] == nil {
 		t.Fatalf("Expected telemetry counters, got %v", telemetry)
 	}

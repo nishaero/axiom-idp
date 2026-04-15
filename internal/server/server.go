@@ -31,12 +31,22 @@ type Server struct {
 	aiBackend   aiBackend
 	deployer    deploymentManager
 	gitops      gitOpsManager
+	stateStore  runtimeStateStore
+	jobs        *asyncJobManager
 	startedAt   time.Time
 }
 
 // New creates a new server instance.
 func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 	metrics := newMetrics()
+	stateStore, err := newRuntimeStateStore(cfg)
+	if err != nil && cfg != nil && cfg.Environment == "production" {
+		return nil, err
+	}
+	if err != nil && logger != nil {
+		logger.WithError(err).Warn("failed to initialize SQL runtime state store; falling back to in-memory state")
+	}
+
 	s := &Server{
 		config:      cfg,
 		logger:      logger,
@@ -49,11 +59,17 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 		aiBackend:   newAIBackend(cfg, logger),
 		deployer:    newDeploymentManager(cfg, logger),
 		gitops:      newGitOpsOrchestrator(cfg, logger),
+		stateStore:  stateStore,
+		jobs:        newAsyncJobManager(cfg, logger),
 		startedAt:   time.Now().UTC(),
 	}
 
 	s.auditor.SetMetrics(metrics)
+	s.auditor.SetStore(stateStore)
+	s.auditor.SetLogger(logger)
 	s.rateLimiter.SetMetrics(metrics)
+	s.rateLimiter.SetStore(stateStore)
+	s.rateLimiter.SetLogger(logger)
 	s.setupRoutes()
 
 	writeTimeout := 15 * time.Second
@@ -100,6 +116,8 @@ func (s *Server) setupRoutes() {
 	api.Handle("/catalog/services/{id}/analysis", s.rbac.Middleware("catalog", "read")(http.HandlerFunc(s.handleServiceInsight))).Methods(http.MethodGet)
 	api.Handle("/platform/status", s.rbac.Middleware("catalog", "read")(http.HandlerFunc(s.handlePlatformStatus))).Methods(http.MethodGet)
 	api.Handle("/platform/observability", s.rbac.Middleware("catalog", "read")(http.HandlerFunc(s.handleObservability))).Methods(http.MethodGet)
+	api.Handle("/jobs", s.rbac.Middleware("services", "read")(http.HandlerFunc(s.handleJobs))).Methods(http.MethodGet)
+	api.Handle("/jobs/{id}", s.rbac.Middleware("services", "read")(http.HandlerFunc(s.handleJobStatus))).Methods(http.MethodGet)
 	api.Handle("/deployments/applications", s.rbac.Middleware("services", "deploy")(http.HandlerFunc(s.handleApplyDeployment))).Methods(http.MethodPost)
 	api.Handle("/deployments/applications/{namespace}/{name}", s.rbac.Middleware("services", "read")(http.HandlerFunc(s.handleDeploymentStatus))).Methods(http.MethodGet)
 
@@ -117,7 +135,18 @@ func (s *Server) Start(addr string) error {
 
 // Shutdown gracefully shuts down the server.
 func (s *Server) Shutdown(ctx context.Context) error {
-	return s.http.Shutdown(ctx)
+	if err := s.http.Shutdown(ctx); err != nil {
+		return err
+	}
+	if s.jobs != nil {
+		if err := s.jobs.Shutdown(ctx); err != nil {
+			return err
+		}
+	}
+	if s.stateStore != nil {
+		_ = s.stateStore.Close()
+	}
+	return nil
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -141,7 +170,7 @@ func (s *Server) handleLive(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
 	readyStatus, checks := s.buildReadinessStatus()
 	httpStatus := http.StatusOK
-	if readyStatus != statusReady {
+	if readyStatus == statusUnready {
 		httpStatus = http.StatusServiceUnavailable
 	}
 	writeJSON(w, httpStatus, map[string]interface{}{
@@ -263,7 +292,7 @@ func (s *Server) handleAIQuery(w http.ResponseWriter, r *http.Request) {
 		}
 
 		operationStart := time.Now()
-		record, err := s.gitops.ApplyArgoCDDeployment(ctx, req)
+		job, record, err := s.enqueueDeploymentJob(ctx, req, payload.Query, userID, roles, "gitops-argocd", "deployment_apply_argocd", "ai")
 		if s.metrics != nil {
 			outcome := "success"
 			if err != nil {
@@ -277,18 +306,20 @@ func (s *Server) handleAIQuery(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, map[string]interface{}{
-			"response":          fmt.Sprintf("Argo CD deployed %s from GitHub branch %s and the rollout is %s in namespace %s.", record.Name, record.Revision, record.Phase, record.Namespace),
+		writeJSON(w, http.StatusAccepted, map[string]interface{}{
+			"response":          fmt.Sprintf("Argo CD deployment request for %s was queued for async execution.", record.Name),
 			"backend":           "gitops-argocd",
 			"query":             payload.Query,
 			"user_id":           userID,
 			"roles":             roles,
 			"intent":            "deployment_apply_argocd",
 			"deployment":        record,
+			"job":               job,
+			"job_status_url":    "/api/v1/jobs/" + job.ID,
 			"execution_plan":    record.ExecutionPlan,
 			"execution_state":   record.ExecutionState,
 			"action_plan":       buildActionPlan(withIntent(queryResult, "deployment_apply_argocd"), record, nil),
-			"generated_text":    fmt.Sprintf("Created GitHub delivery branch %s and Argo CD application %s.", record.Revision, record.ApplicationName),
+			"generated_text":    fmt.Sprintf("Created GitHub delivery branch %s and queued Argo CD application %s.", fallbackString(record.Revision, "generated"), fallbackString(record.ApplicationName, record.Name)),
 			"delivery_provider": "argocd",
 		})
 		return
@@ -339,7 +370,7 @@ func (s *Server) handleAIQuery(w http.ResponseWriter, r *http.Request) {
 		}
 
 		operationStart := time.Now()
-		record, err := s.deployer.Apply(ctx, req)
+		job, record, err := s.enqueueDeploymentJob(ctx, req, payload.Query, userID, roles, "deployment-control-plane", "deployment_apply", "ai")
 		if s.metrics != nil {
 			outcome := "success"
 			if err != nil {
@@ -353,18 +384,20 @@ func (s *Server) handleAIQuery(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, map[string]interface{}{
-			"response":        fmt.Sprintf("Deployment %s is %s in namespace %s with %d/%d ready replicas.", record.Name, record.Phase, record.Namespace, record.ReadyReplicas, record.Replicas),
+		writeJSON(w, http.StatusAccepted, map[string]interface{}{
+			"response":        fmt.Sprintf("Deployment %s was queued for async execution in namespace %s.", record.Name, record.Namespace),
 			"backend":         "deployment-control-plane",
 			"query":           payload.Query,
 			"user_id":         userID,
 			"roles":           roles,
 			"intent":          "deployment_apply",
 			"deployment":      record,
+			"job":             job,
+			"job_status_url":  "/api/v1/jobs/" + job.ID,
 			"execution_plan":  record.ExecutionPlan,
 			"execution_state": record.ExecutionState,
-			"action_plan":     buildActionPlan(withIntent(queryResult, "deployment_apply"), record, nil),
-			"generated_text":  fmt.Sprintf("Applied deployment %s using image %s and service type %s.", record.Name, record.Image, record.ServiceType),
+			"action_plan":     buildActionPlan(catalogQueryResult{Intent: "deployment_apply"}, record, nil),
+			"generated_text":  fmt.Sprintf("Queued deployment %s using image %s and service type %s.", record.Name, record.Image, record.ServiceType),
 		})
 		return
 	}
@@ -413,7 +446,7 @@ func (s *Server) handleAIQuery(w http.ResponseWriter, r *http.Request) {
 		}
 
 		operationStart := time.Now()
-		record, err := s.gitops.ApplyInfrastructure(ctx, req)
+		job, record, err := s.enqueueInfrastructureJob(ctx, req, payload.Query, userID, roles, "gitops-infrastructure", "infrastructure_apply_"+req.Provider, "ai")
 		if s.metrics != nil {
 			outcome := "success"
 			if err != nil {
@@ -427,7 +460,7 @@ func (s *Server) handleAIQuery(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, map[string]interface{}{
+		writeJSON(w, http.StatusAccepted, map[string]interface{}{
 			"response":             record.Message,
 			"backend":              "gitops-infrastructure",
 			"query":                payload.Query,
@@ -435,6 +468,8 @@ func (s *Server) handleAIQuery(w http.ResponseWriter, r *http.Request) {
 			"roles":                roles,
 			"intent":               "infrastructure_apply_" + record.Provider,
 			"infrastructure":       record,
+			"job":                  job,
+			"job_status_url":       "/api/v1/jobs/" + job.ID,
 			"execution_plan":       record.ExecutionPlan,
 			"execution_state":      record.ExecutionState,
 			"action_plan":          buildActionPlan(withIntent(queryResult, "infrastructure_apply_"+record.Provider), nil, record),
@@ -490,7 +525,7 @@ func (s *Server) handleApplyDeployment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	record, err := s.deployer.Apply(r.Context(), req)
+	job, record, err := s.enqueueDeploymentJob(r.Context(), req, fmt.Sprintf("%s deployment request queued through the control plane", req.Name), auth.UserIDFromContext(r.Context()), auth.RolesFromContext(r.Context()), "deployment-control-plane", "deployment_apply", "api")
 	if s.metrics != nil {
 		outcome := "success"
 		if err != nil {
@@ -503,8 +538,16 @@ func (s *Server) handleApplyDeployment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"deployment": record,
+	writeJSON(w, http.StatusAccepted, map[string]interface{}{
+		"response":        fmt.Sprintf("Deployment %s was queued for async execution in namespace %s.", record.Name, record.Namespace),
+		"backend":         "deployment-control-plane",
+		"intent":          "deployment_apply",
+		"deployment":      record,
+		"job":             job,
+		"job_status_url":  "/api/v1/jobs/" + job.ID,
+		"execution_plan":  record.ExecutionPlan,
+		"execution_state": record.ExecutionState,
+		"action_plan":     buildActionPlan(catalogQueryResult{Intent: "deployment_apply"}, record, nil),
 	})
 }
 
@@ -527,6 +570,155 @@ func (s *Server) handleDeploymentStatus(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"deployment": record,
 	})
+}
+
+func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
+	if s.jobs == nil {
+		s.writeError(w, http.StatusServiceUnavailable, "job manager unavailable")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"jobs":  s.jobs.List(),
+		"stats": s.jobs.Stats(),
+	})
+}
+
+func (s *Server) handleJobStatus(w http.ResponseWriter, r *http.Request) {
+	if s.jobs == nil {
+		s.writeError(w, http.StatusServiceUnavailable, "job manager unavailable")
+		return
+	}
+
+	job, ok := s.jobs.Get(strings.TrimSpace(mux.Vars(r)["id"]))
+	if !ok {
+		s.writeError(w, http.StatusNotFound, "job not found")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"job": job,
+	})
+}
+
+func (s *Server) enqueueDeploymentJob(
+	ctx context.Context,
+	req deploymentApplyRequest,
+	query string,
+	userID string,
+	roles []string,
+	backend string,
+	intent string,
+	source string,
+) (*asyncJob, *deploymentRecord, error) {
+	if s.jobs == nil {
+		return nil, nil, errors.New("job manager unavailable")
+	}
+
+	normalizedReq, err := normalizeDeploymentRequest(req, s.config.KubernetesNamespace)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	plannedRecord := queuedDeploymentRecord(normalizedReq, intent)
+	submission := asyncJobSubmission{
+		Kind:          asyncJobKindDeploymentApply,
+		Intent:        intent,
+		Backend:       backend,
+		Source:        source,
+		UserID:        userID,
+		Roles:         roles,
+		Summary:       fmt.Sprintf("Deployment request for %s queued for async execution.", normalizedReq.Name),
+		Detail:        query,
+		ResourceType:  "deployment",
+		ResourceName:  normalizedReq.Name,
+		Namespace:     normalizedReq.Namespace,
+		Provider:      normalizedReq.Delivery,
+		Route:         plannedRecord.ExecutionPlan.Route,
+		Mode:          plannedRecord.ExecutionPlan.Mode,
+		ExecutionPlan: plannedRecord.ExecutionPlan,
+		Task: func(jobCtx context.Context) (*asyncJobResult, error) {
+			var record *deploymentRecord
+			var err error
+			if normalizedReq.Delivery == "argocd" {
+				record, err = s.gitops.ApplyArgoCDDeployment(jobCtx, normalizedReq)
+			} else {
+				record, err = s.deployer.Apply(jobCtx, normalizedReq)
+			}
+			if err != nil {
+				return nil, err
+			}
+			return &asyncJobResult{Deployment: record}, nil
+		},
+	}
+
+	job, err := s.jobs.Submit(ctx, submission)
+	if err != nil {
+		return nil, nil, err
+	}
+	plannedRecord.JobID = job.ID
+	plannedRecord.JobStatus = job.Status
+	plannedRecord.ExecutionState = job.Status
+	plannedRecord.Message = fmt.Sprintf("Deployment request for %s was accepted and queued as %s.", plannedRecord.Name, job.ID)
+	plannedRecord.ExecutionPlan = cloneExecutionPlan(job.ExecutionPlan)
+	return job, plannedRecord, nil
+}
+
+func (s *Server) enqueueInfrastructureJob(
+	ctx context.Context,
+	req infrastructureApplyRequest,
+	query string,
+	userID string,
+	roles []string,
+	backend string,
+	intent string,
+	source string,
+) (*asyncJob, *infrastructureRecord, error) {
+	if s.jobs == nil {
+		return nil, nil, errors.New("job manager unavailable")
+	}
+
+	normalizedReq, err := normalizeInfrastructureRequest(req)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	plannedRecord := queuedInfrastructureRecord(normalizedReq, intent)
+	submission := asyncJobSubmission{
+		Kind:          asyncJobKindInfrastructureApply,
+		Intent:        intent,
+		Backend:       backend,
+		Source:        source,
+		UserID:        userID,
+		Roles:         roles,
+		Summary:       fmt.Sprintf("%s infrastructure request queued for async execution.", strings.Title(normalizedReq.Provider)),
+		Detail:        query,
+		ResourceType:  "infrastructure",
+		ResourceName:  normalizedReq.Name,
+		Namespace:     normalizedReq.TargetNamespace,
+		Provider:      normalizedReq.Provider,
+		Route:         plannedRecord.ExecutionPlan.Route,
+		Mode:          plannedRecord.ExecutionPlan.Mode,
+		ExecutionPlan: plannedRecord.ExecutionPlan,
+		Task: func(jobCtx context.Context) (*asyncJobResult, error) {
+			record, err := s.gitops.ApplyInfrastructure(jobCtx, normalizedReq)
+			if err != nil {
+				return nil, err
+			}
+			return &asyncJobResult{Infrastructure: record}, nil
+		},
+	}
+
+	job, err := s.jobs.Submit(ctx, submission)
+	if err != nil {
+		return nil, nil, err
+	}
+	plannedRecord.JobID = job.ID
+	plannedRecord.JobStatus = job.Status
+	plannedRecord.ExecutionState = job.Status
+	plannedRecord.Message = fmt.Sprintf("%s infrastructure request was accepted and queued as %s.", strings.Title(plannedRecord.Provider), job.ID)
+	plannedRecord.ExecutionPlan = cloneExecutionPlan(job.ExecutionPlan)
+	return job, plannedRecord, nil
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {

@@ -2,9 +2,10 @@
 
 ## Prerequisites
 
-- Go 1.22+
-- Node.js 18+
-- npm or pnpm
+- Go 1.24+
+- Node.js 24+
+- npm
+- Docker and Docker Compose v2
 - Make
 - Git
 
@@ -14,7 +15,7 @@
 
 ```bash
 # Clone repository
-git clone https://github.com/axiom-idp/axiom-idp.git
+git clone https://github.com/nishaero/axiom-idp.git
 cd axiom-idp
 
 # Install dependencies
@@ -31,7 +32,7 @@ make dev
 ### Docker
 
 ```bash
-docker-compose up -d
+docker compose up -d --build
 ```
 
 ## Configuration
@@ -40,26 +41,32 @@ Create `.env` file:
 
 ```bash
 # Server
-AXIOM_PORT=8080
+AXIOM_HOST=0.0.0.0
+AXIOM_PORT=8081
 AXIOM_ENV=development
 AXIOM_LOG_LEVEL=info
+AXIOM_SESSION_SECRET=replace-with-a-long-random-secret
 
-# OAuth2 (optional)
-AXIOM_OAUTH_PROVIDER=github
-AXIOM_OAUTH_CLIENT_ID=your-client-id
-AXIOM_OAUTH_CLIENT_SECRET=your-secret
+# AI
+AXIOM_AI_BACKEND=local
+# AXIOM_AI_BACKEND=ollama
+# AXIOM_AI_BASE_URL=http://host.docker.internal:11434
+# AXIOM_AI_MODEL=qwen3.5:9b
+
+# Optional shared runtime state
+# AXIOM_DB_DRIVER=postgres
+# AXIOM_DB_URL=postgres://axiom:secret@postgres.default.svc.cluster.local:5432/axiom?sslmode=disable
 ```
 
 Load and start:
 
 ```bash
 source .env
-axiom-server
+./bin/axiom-server
 ```
 
 ## Next Steps
 
-- [Configuration Guide](./configuration.md)
-- [API Documentation](./api.md)
+- [README](../README.md)
+- [Deployment Guide](../DEPLOYMENT.md)
 - [Architecture Overview](./architecture.md)
-- [Deployment Guide](./deployment.md)

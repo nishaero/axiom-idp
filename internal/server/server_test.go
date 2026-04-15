@@ -76,6 +76,47 @@ func TestServerReady(t *testing.T) {
 	}
 }
 
+func TestProductionSQLiteReadinessIsDegraded(t *testing.T) {
+	cfg := &config.Config{
+		Port:              8080,
+		Environment:       "production",
+		LogLevel:          "info",
+		SessionSecret:     "test-secret",
+		SessionMaxAge:     86400,
+		CORSOrigins:       []string{"http://localhost:3000"},
+		RateLimitRequests: 100,
+		RateLimitWindow:   time.Minute,
+		DBDriver:          "sqlite3",
+		DBURL:             "file:axiom.db",
+		AIBackend:         "local",
+		AITimeout:         5 * time.Second,
+		AIMaxTokens:       128,
+	}
+
+	logger := logrus.New()
+	server, err := New(cfg, logger)
+	if err != nil {
+		t.Fatalf("Failed to create server: %v", err)
+	}
+
+	req := httptest.NewRequest("GET", "/ready", nil)
+	w := httptest.NewRecorder()
+
+	server.handleReady(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected degraded readiness to stay HTTP 200, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("Failed to parse ready response: %v", err)
+	}
+	if resp["status"] != statusDegraded {
+		t.Fatalf("Expected degraded readiness status, got %v", resp["status"])
+	}
+}
+
 func TestServerMiddleware(t *testing.T) {
 	cfg := &config.Config{
 		Port:        8080,
@@ -363,7 +404,7 @@ func TestHandleAIQueryReleaseBrief(t *testing.T) {
 
 func TestHandleAIQueryOllamaBackend(t *testing.T) {
 	ollama := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/generate" {
+		if r.URL.Path != "/v1/chat/completions" {
 			http.NotFound(w, r)
 			return
 		}
@@ -372,12 +413,16 @@ func TestHandleAIQueryOllamaBackend(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 			t.Fatalf("failed to decode ollama request: %v", err)
 		}
-		if think, ok := payload["think"].(bool); !ok || think {
-			t.Fatalf("expected think=false in ollama request, got %v", payload["think"])
+		if model := payload["model"]; model != "qwen3.5:9b" {
+			t.Fatalf("expected ollama model qwen3.5:9b, got %v", model)
+		}
+		messages, ok := payload["messages"].([]interface{})
+		if !ok || len(messages) < 2 {
+			t.Fatalf("expected chat messages in ollama-compatible request, got %T", payload["messages"])
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"response":"Ollama says this release is ready with caution."}`))
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"Ollama says this release is ready with caution."}}]}`))
 	}))
 	defer ollama.Close()
 
@@ -425,6 +470,74 @@ func TestHandleAIQueryOllamaBackend(t *testing.T) {
 	}
 	if resp["portfolio"] == nil {
 		t.Fatal("Expected structured portfolio intelligence")
+	}
+}
+
+func TestHandleAIQueryOpenAICompatibleBackend(t *testing.T) {
+	openai := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" {
+			http.NotFound(w, r)
+			return
+		}
+		if authz := r.Header.Get("Authorization"); authz != "Bearer test-openai-key" {
+			t.Fatalf("expected bearer token auth header, got %q", authz)
+		}
+
+		var payload map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("failed to decode openai-compatible request: %v", err)
+		}
+		if model := payload["model"]; model != "gpt-4o-mini" {
+			t.Fatalf("expected model gpt-4o-mini, got %v", model)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"Cloud model says the release should remain on watch."}}]}`))
+	}))
+	defer openai.Close()
+
+	cfg := &config.Config{
+		Port:              8080,
+		Environment:       "test",
+		LogLevel:          "info",
+		SessionSecret:     "test-secret",
+		SessionMaxAge:     86400,
+		CORSOrigins:       []string{"http://localhost:3000"},
+		RateLimitRequests: 100,
+		RateLimitWindow:   time.Minute,
+		AIBackend:         "openai",
+		AIBaseURL:         openai.URL,
+		AIAPIKey:          "test-openai-key",
+		AIModel:           "gpt-4o-mini",
+		AITimeout:         5 * time.Second,
+		AIMaxTokens:       128,
+	}
+
+	logger := logrus.New()
+	server, err := New(cfg, logger)
+	if err != nil {
+		t.Fatalf("Failed to create server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/ai/query", strings.NewReader(`{"query":"summarize release readiness"}`))
+	req = req.WithContext(auth.ContextWithUser(req.Context(), "user-1", []string{auth.RoleEngineer}))
+	w := httptest.NewRecorder()
+	server.handleAIQuery(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected 200, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("Failed to parse response: %v", err)
+	}
+
+	if resp["backend"] != "openai" {
+		t.Fatalf("Expected openai backend, got %v", resp["backend"])
+	}
+	if resp["generated_text"] == "" {
+		t.Fatal("Expected generated_text in response")
 	}
 }
 
@@ -687,6 +800,28 @@ func (f *fakeGitOpsManager) TerraformInfrastructureStatus(_ context.Context, _ s
 	return f.infraRecord, nil
 }
 
+func waitForAsyncJobStatus(t *testing.T, server *Server, jobID string, wantStatus string) *asyncJob {
+	t.Helper()
+	if server == nil || server.jobs == nil {
+		t.Fatal("Expected server job manager")
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		job, ok := server.jobs.Get(jobID)
+		if ok && job != nil && job.Status == wantStatus {
+			return job
+		}
+		if time.Now().After(deadline) {
+			if job, ok := server.jobs.Get(jobID); ok && job != nil {
+				t.Fatalf("Timed out waiting for job %s to reach %s, last status %s", jobID, wantStatus, job.Status)
+			}
+			t.Fatalf("Timed out waiting for job %s to reach %s", jobID, wantStatus)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 func TestHandleApplyDeploymentEndpoint(t *testing.T) {
 	cfg := &config.Config{
 		Port:                     8080,
@@ -726,8 +861,8 @@ func TestHandleApplyDeploymentEndpoint(t *testing.T) {
 	w := httptest.NewRecorder()
 	server.handleApplyDeployment(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("Expected 200, got %d", w.Code)
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("Expected 202, got %d", w.Code)
 	}
 
 	var resp map[string]interface{}
@@ -735,7 +870,20 @@ func TestHandleApplyDeploymentEndpoint(t *testing.T) {
 		t.Fatalf("Failed to parse response: %v", err)
 	}
 	if resp["deployment"] == nil {
-		t.Fatal("Expected deployment payload")
+		t.Fatal("Expected queued deployment payload")
+	}
+	if resp["job"] == nil {
+		t.Fatal("Expected queued job payload")
+	}
+
+	job := resp["job"].(map[string]interface{})
+	if job["status"] != "queued" {
+		t.Fatalf("Expected queued job status, got %v", job["status"])
+	}
+	jobID, _ := job["id"].(string)
+	finalJob := waitForAsyncJobStatus(t, server, jobID, "succeeded")
+	if finalJob.Deployment == nil || finalJob.Deployment.Phase != "ready" {
+		t.Fatalf("Expected completed deployment result, got %+v", finalJob.Deployment)
 	}
 }
 
@@ -826,8 +974,8 @@ func TestHandleAIQueryDeploymentApply(t *testing.T) {
 	w := httptest.NewRecorder()
 	server.handleAIQuery(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("Expected 200, got %d", w.Code)
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("Expected 202, got %d", w.Code)
 	}
 
 	var resp map[string]interface{}
@@ -838,7 +986,10 @@ func TestHandleAIQueryDeploymentApply(t *testing.T) {
 		t.Fatalf("Expected deployment_apply intent, got %v", resp["intent"])
 	}
 	if resp["deployment"] == nil {
-		t.Fatal("Expected deployment payload")
+		t.Fatal("Expected queued deployment payload")
+	}
+	if resp["job"] == nil {
+		t.Fatal("Expected queued job payload")
 	}
 	actionPlan, ok := resp["action_plan"].(map[string]interface{})
 	if !ok {
@@ -846,6 +997,16 @@ func TestHandleAIQueryDeploymentApply(t *testing.T) {
 	}
 	if actionPlan["mode"] != "delivery" {
 		t.Fatalf("Expected delivery action plan mode, got %v", actionPlan["mode"])
+	}
+
+	job := resp["job"].(map[string]interface{})
+	if job["status"] != "queued" {
+		t.Fatalf("Expected queued job status, got %v", job["status"])
+	}
+	jobID, _ := job["id"].(string)
+	finalJob := waitForAsyncJobStatus(t, server, jobID, "succeeded")
+	if finalJob.Deployment == nil || finalJob.Deployment.Name != "demo-web" {
+		t.Fatalf("Expected completed deployment result, got %+v", finalJob.Deployment)
 	}
 }
 
@@ -996,8 +1157,8 @@ func TestHandleAIQueryArgoCDDeploymentApply(t *testing.T) {
 	w := httptest.NewRecorder()
 	server.handleAIQuery(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("Expected 200, got %d", w.Code)
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("Expected 202, got %d", w.Code)
 	}
 
 	var resp map[string]interface{}
@@ -1006,6 +1167,9 @@ func TestHandleAIQueryArgoCDDeploymentApply(t *testing.T) {
 	}
 	if resp["intent"] != "deployment_apply_argocd" {
 		t.Fatalf("Expected deployment_apply_argocd intent, got %v", resp["intent"])
+	}
+	if resp["job"] == nil {
+		t.Fatal("Expected queued job payload")
 	}
 	executionPlan, ok := resp["execution_plan"].(map[string]interface{})
 	if !ok {
@@ -1020,6 +1184,16 @@ func TestHandleAIQueryArgoCDDeploymentApply(t *testing.T) {
 	}
 	if actionPlan["title"] != "AI-guided GitOps rollout" {
 		t.Fatalf("Expected GitOps action plan title, got %v", actionPlan["title"])
+	}
+
+	job := resp["job"].(map[string]interface{})
+	if job["status"] != "queued" {
+		t.Fatalf("Expected queued job status, got %v", job["status"])
+	}
+	jobID, _ := job["id"].(string)
+	finalJob := waitForAsyncJobStatus(t, server, jobID, "succeeded")
+	if finalJob.Deployment == nil || finalJob.Deployment.Delivery != "github-argocd" {
+		t.Fatalf("Expected completed Argo CD deployment result, got %+v", finalJob.Deployment)
 	}
 }
 
@@ -1128,8 +1302,8 @@ func TestHandleAIQueryInfrastructureTerraform(t *testing.T) {
 	w := httptest.NewRecorder()
 	server.handleAIQuery(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("Expected 200, got %d", w.Code)
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("Expected 202, got %d", w.Code)
 	}
 
 	var resp map[string]interface{}
@@ -1138,6 +1312,9 @@ func TestHandleAIQueryInfrastructureTerraform(t *testing.T) {
 	}
 	if resp["intent"] != "infrastructure_apply_terraform" {
 		t.Fatalf("Expected infrastructure_apply_terraform intent, got %v", resp["intent"])
+	}
+	if resp["job"] == nil {
+		t.Fatal("Expected queued job payload")
 	}
 	executionPlan, ok := resp["execution_plan"].(map[string]interface{})
 	if !ok {
@@ -1152,6 +1329,16 @@ func TestHandleAIQueryInfrastructureTerraform(t *testing.T) {
 	}
 	if actionPlan["mode"] != "infrastructure" {
 		t.Fatalf("Expected infrastructure action plan mode, got %v", actionPlan["mode"])
+	}
+
+	job := resp["job"].(map[string]interface{})
+	if job["status"] != "queued" {
+		t.Fatalf("Expected queued job status, got %v", job["status"])
+	}
+	jobID, _ := job["id"].(string)
+	finalJob := waitForAsyncJobStatus(t, server, jobID, "succeeded")
+	if finalJob.Infrastructure == nil || finalJob.Infrastructure.Provider != "terraform" {
+		t.Fatalf("Expected completed terraform infrastructure result, got %+v", finalJob.Infrastructure)
 	}
 }
 

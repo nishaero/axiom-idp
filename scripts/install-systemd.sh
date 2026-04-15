@@ -60,6 +60,7 @@ AXIOM_ENV=production
 AXIOM_LOG_LEVEL=info
 AXIOM_DB_DRIVER=sqlite3
 AXIOM_DB_URL=file:/var/lib/axiom/axiom.db
+# Set AXIOM_DB_DRIVER=postgres and AXIOM_DB_URL to a shared PostgreSQL instance for HA deployments.
 AXIOM_SESSION_SECRET=change-me-in-production
 EOF
     chmod 600 "$CONFIG_DIR/.env"
