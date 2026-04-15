@@ -35,7 +35,7 @@ trap cleanup EXIT INT TERM
 BACKEND_PID=$!
 
 for _ in $(seq 1 60); do
-  if curl -fsS "http://127.0.0.1:${AXIOM_PORT}/health" >/dev/null 2>&1; then
+  if curl -fsS "http://127.0.0.1:${AXIOM_PORT}/ready" >/dev/null 2>&1; then
     break
   fi
 
@@ -48,7 +48,7 @@ for _ in $(seq 1 60); do
   sleep 1
 done
 
-if ! curl -fsS "http://127.0.0.1:${AXIOM_PORT}/health" >/dev/null 2>&1; then
+if ! curl -fsS "http://127.0.0.1:${AXIOM_PORT}/ready" >/dev/null 2>&1; then
   echo "Backend did not become healthy in time."
   cat "${BACKEND_LOG}" || true
   exit 1

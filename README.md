@@ -32,14 +32,16 @@ Axiom is an AI-native internal developer platform focused on release readiness, 
 ### ✨ Key Features
 
 - **AI-Native Architecture**: Deterministic platform analysis with local or Ollama-backed AI guidance
-- **GitOps Delivery**: AI can trigger direct Kubernetes deploys or GitHub-backed Argo CD delivery flows
-- **Infrastructure Workflows**: Terraform-backed infrastructure requests are supported through GitOps execution
+- **GitOps Delivery**: AI can trigger direct Kubernetes deploys or GitHub-backed Argo CD delivery flows with explicit execution plans
+- **Infrastructure Workflows**: Terraform-backed infrastructure requests run through GitHub and Argo CD, while Crossplane requests are staged with controller-dependent execution notes
+- **Release Briefs**: exportable evidence-native operator briefs with next-best-action guidance and missing-evidence cues
 - **Optional MCP Integration Plane**: MCP remains available for pluggable AI-facing integrations without owning the core runtime
 - **RBAC & OAuth2/OIDC**: Enterprise-grade security with fine-grained access control
 - **Professional UI**: Modern React + TypeScript + Tailwind CSS frontend
 - **Production-Ready Delivery Paths**: Docker, Kubernetes, GitHub Actions, GHCR, and semver-tagged release automation
 - **Security First**: BSI C5-aligned baseline, signed images, SBOM generation, provenance attestation, vulnerability scanning
-- **Operational Visibility**: Audit trails, readiness/liveness endpoints, and backend-fed platform status in the UI
+- **Operational Visibility**: Audit trails, Prometheus-compatible `/metrics`, readiness/liveness endpoints, and backend-fed platform status in the UI
+- **Dedicated Observability View**: A live control-plane page for health, telemetry counters, scrape hints, and operational checks
 
 ---
 
@@ -116,6 +118,8 @@ Visit `http://localhost:8080` in your browser.
 - `/ready` returns runtime readiness
 - `/health` returns platform health summary
 - `/api/v1/platform/status` returns backend-fed operational status used by the dashboard
+- `/api/v1/platform/observability` returns the live observability snapshot used by the operator view
+- `/metrics` exposes Prometheus-style application metrics
 
 ---
 

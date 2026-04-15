@@ -59,26 +59,28 @@ type deploymentApplyRequest struct {
 }
 
 type deploymentRecord struct {
-	Name              string   `json:"name"`
-	Namespace         string   `json:"namespace"`
-	Image             string   `json:"image"`
-	Replicas          int      `json:"replicas"`
-	ReadyReplicas     int      `json:"ready_replicas"`
-	AvailableReplicas int      `json:"available_replicas"`
-	UpdatedReplicas   int      `json:"updated_replicas"`
-	ServiceType       string   `json:"service_type"`
-	ClusterIP         string   `json:"cluster_ip,omitempty"`
-	Phase             string   `json:"phase"`
-	Conditions        []string `json:"conditions"`
-	Message           string   `json:"message"`
-	ManifestName      string   `json:"manifest_name,omitempty"`
-	Delivery          string   `json:"delivery,omitempty"`
-	RepoURL           string   `json:"repo_url,omitempty"`
-	Revision          string   `json:"revision,omitempty"`
-	Path              string   `json:"path,omitempty"`
-	ApplicationName   string   `json:"application_name,omitempty"`
-	SyncStatus        string   `json:"sync_status,omitempty"`
-	HealthStatus      string   `json:"health_status,omitempty"`
+	Name              string         `json:"name"`
+	Namespace         string         `json:"namespace"`
+	Image             string         `json:"image"`
+	Replicas          int            `json:"replicas"`
+	ReadyReplicas     int            `json:"ready_replicas"`
+	AvailableReplicas int            `json:"available_replicas"`
+	UpdatedReplicas   int            `json:"updated_replicas"`
+	ServiceType       string         `json:"service_type"`
+	ClusterIP         string         `json:"cluster_ip,omitempty"`
+	Phase             string         `json:"phase"`
+	Conditions        []string       `json:"conditions"`
+	Message           string         `json:"message"`
+	ManifestName      string         `json:"manifest_name,omitempty"`
+	Delivery          string         `json:"delivery,omitempty"`
+	RepoURL           string         `json:"repo_url,omitempty"`
+	Revision          string         `json:"revision,omitempty"`
+	Path              string         `json:"path,omitempty"`
+	ApplicationName   string         `json:"application_name,omitempty"`
+	SyncStatus        string         `json:"sync_status,omitempty"`
+	HealthStatus      string         `json:"health_status,omitempty"`
+	ExecutionState    string         `json:"execution_state,omitempty"`
+	ExecutionPlan     *executionPlan `json:"execution_plan,omitempty"`
 }
 
 func newDeploymentManager(cfg *config.Config, logger *logrus.Logger) deploymentManager {
@@ -144,6 +146,8 @@ func (m *kubectlDeploymentManager) Apply(ctx context.Context, req deploymentAppl
 		return nil, err
 	}
 	record.ManifestName = spec.Name
+	record.ExecutionPlan = newDeploymentExecutionPlan("deployment_apply", spec)
+	record.ExecutionState = record.Phase
 	return record, nil
 }
 
@@ -218,6 +222,12 @@ func (m *kubectlDeploymentManager) Status(ctx context.Context, namespace, name s
 	if record.Message == "" {
 		record.Message = fmt.Sprintf("%s has %d/%d ready replicas", record.Name, record.ReadyReplicas, record.Replicas)
 	}
+	record.ExecutionState = record.Phase
+	record.ExecutionPlan = newDeploymentExecutionPlan("deployment_status", deploymentApplyRequest{
+		Namespace: namespace,
+		Name:      name,
+		Delivery:  "kubectl",
+	})
 
 	serviceOutput, err := m.runner.Run(ctx, m.kubectlPath, []string{"-n", namespace, "get", "service", name, "-o", "json"}, nil)
 	if err == nil {
@@ -258,6 +268,7 @@ func normalizeDeploymentRequest(req deploymentApplyRequest, defaultNamespace str
 	req.Namespace = normalizeKubernetesName(req.Namespace)
 	req.Image = strings.TrimSpace(req.Image)
 	req.ServiceType = strings.TrimSpace(req.ServiceType)
+	req.Delivery = strings.ToLower(strings.TrimSpace(req.Delivery))
 
 	if req.Name == "" {
 		return deploymentApplyRequest{}, errors.New("deployment name is required")
@@ -288,6 +299,14 @@ func normalizeDeploymentRequest(req deploymentApplyRequest, defaultNamespace str
 	}
 	if req.ServiceType != "ClusterIP" && req.ServiceType != "NodePort" {
 		return deploymentApplyRequest{}, errors.New("deployment service_type must be ClusterIP or NodePort")
+	}
+	switch req.Delivery {
+	case "", "kubectl", "kubernetes":
+		req.Delivery = "kubectl"
+	case "argocd", "argo", "argo-cd", "github", "github-argocd":
+		req.Delivery = "argocd"
+	default:
+		return deploymentApplyRequest{}, errors.New("deployment delivery must be kubectl or argocd")
 	}
 	return req, nil
 }

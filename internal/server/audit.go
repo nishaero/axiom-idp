@@ -24,8 +24,9 @@ type AuditLog struct {
 
 // Auditor logs all server actions.
 type Auditor struct {
-	mu   sync.RWMutex
-	logs []AuditLog
+	mu      sync.RWMutex
+	logs    []AuditLog
+	metrics *Metrics
 }
 
 type AuditStats struct {
@@ -41,6 +42,17 @@ func NewAuditor() *Auditor {
 	return &Auditor{
 		logs: make([]AuditLog, 0, 256),
 	}
+}
+
+// SetMetrics wires the audit subsystem into the shared telemetry collector.
+func (a *Auditor) SetMetrics(metrics *Metrics) {
+	if a == nil {
+		return
+	}
+
+	a.mu.Lock()
+	a.metrics = metrics
+	a.mu.Unlock()
 }
 
 // Log records an audit log entry.
@@ -61,7 +73,12 @@ func (a *Auditor) Log(ctx context.Context, userID, action, resource, status stri
 
 	a.mu.Lock()
 	a.logs = append(a.logs, entry)
+	metrics := a.metrics
 	a.mu.Unlock()
+
+	if metrics != nil {
+		metrics.RecordAudit(status)
+	}
 }
 
 // LogError records an error in audit log.
@@ -82,7 +99,12 @@ func (a *Auditor) LogError(ctx context.Context, userID, action, resource string,
 
 	a.mu.Lock()
 	a.logs = append(a.logs, entry)
+	metrics := a.metrics
 	a.mu.Unlock()
+
+	if metrics != nil {
+		metrics.RecordAudit("error")
+	}
 }
 
 // GetLogs returns audit logs with optional filtering.

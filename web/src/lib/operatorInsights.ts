@@ -17,6 +17,24 @@ export interface ReleaseDecision {
   aiPrompt: string
 }
 
+export interface ReleaseBrief {
+  serviceName: string
+  decision: string
+  summary: string
+  readinessScore: number
+  evidenceCoverage: number
+  missingEvidence: string[]
+  nextBestAction: string
+  nextBestOwner: string
+  nextBestEffort: string
+  nextBestImpact: string
+  supportingActions: string[]
+  evidencePack: string[]
+  portfolioContext: string
+  assistantPrompt: string
+  exportLabel: string
+}
+
 export interface WorkspaceSnapshot {
   totalServices: number
   readyServices: number
@@ -286,10 +304,61 @@ export function getWorkspaceSnapshot(services: DemoCatalogService[]): WorkspaceS
   }
 }
 
+export function buildReleaseBrief(
+  service: DemoCatalogService,
+  decision: ReleaseDecision,
+  workspaceSnapshot: WorkspaceSnapshot
+): ReleaseBrief {
+  const readinessScore = Math.max(
+    0,
+    Math.min(
+      100,
+      Math.round(
+        service.healthScore +
+          service.evidence.length * 4 +
+          (service.owner === 'Unassigned' ? -18 : 8) +
+          (service.releaseState === 'blocked' ? -24 : service.releaseState === 'watch' ? -10 : 0)
+      )
+    )
+  )
+  const evidenceCoverage = Math.max(
+    0,
+    Math.min(100, service.evidence.length * 30 + (service.owner === 'Unassigned' ? 0 : 10))
+  )
+
+  return {
+    serviceName: service.name,
+    decision: decision.title,
+    summary: decision.summary,
+    readinessScore,
+    evidenceCoverage,
+    missingEvidence: decision.verdict === 'block'
+      ? ['service owner assignment', 'control evidence refresh', 'release approval evidence']
+      : decision.verdict === 'watch'
+        ? ['fresh release approval evidence']
+        : [],
+    nextBestAction: decision.nextSteps[0] ?? `Generate a release brief for ${service.name}`,
+    nextBestOwner: service.owner,
+    nextBestEffort: decision.verdict === 'go' ? 'small' : 'medium',
+    nextBestImpact:
+      decision.verdict === 'go'
+        ? 'keeps audit traceability intact'
+        : decision.verdict === 'watch'
+          ? 'lowers release risk'
+          : 'unblocks the release path',
+    supportingActions: decision.nextSteps.slice(1, 4),
+    evidencePack: [...decision.evidence],
+    portfolioContext: `${workspaceSnapshot.readyServices} ready, ${workspaceSnapshot.watchServices} watch, ${workspaceSnapshot.blockedServices} blocked, ${workspaceSnapshot.ownerlessServices} owner gaps across the workspace.`,
+    assistantPrompt: `${decision.aiPrompt} Generate a release brief and explain the next best action.`,
+    exportLabel: `${service.name} release brief`,
+  }
+}
+
 export function buildAssistantPrompts(service?: DemoCatalogService) {
   if (!service) {
     return [
       'Summarize the top release risks across the catalog',
+      'Generate a release brief for the workspace',
       'Generate a BSI C5 evidence pack for the workspace',
       'Show planned vs executed workflows for the current release queue',
       'Find owner gaps and stale controls before release',
@@ -300,6 +369,7 @@ export function buildAssistantPrompts(service?: DemoCatalogService) {
 
   return [
     `Assess the release decision for ${service.name}`,
+    `Generate a release brief for ${service.name}`,
     `Generate an evidence pack for ${service.name}`,
     `Request an Argo CD deployment for ${service.name}`,
     `Show deployment status for ${service.name}`,

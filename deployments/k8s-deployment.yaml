@@ -50,6 +50,10 @@ metadata:
   namespace: axiom
   labels:
     app.kubernetes.io/name: axiom-server
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/path: "/metrics"
+    prometheus.io/port: "80"
 spec:
   replicas: 2
   revisionHistoryLimit: 3
@@ -61,6 +65,10 @@ spec:
       labels:
         app.kubernetes.io/name: axiom-server
         app.kubernetes.io/component: api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "80"
     spec:
       serviceAccountName: axiom-server
       automountServiceAccountToken: false
@@ -154,6 +162,10 @@ kind: Service
 metadata:
   name: axiom-server
   namespace: axiom
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/path: "/metrics"
+    prometheus.io/port: "80"
 spec:
   selector:
     app.kubernetes.io/name: axiom-server

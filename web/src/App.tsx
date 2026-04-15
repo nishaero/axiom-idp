@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query'
 import Layout from '@/components/Layout'
 import Dashboard from '@/pages/Dashboard'
+import Observability from '@/pages/Observability'
 import Catalog from '@/pages/Catalog'
 import AIAssistant from '@/pages/AIAssistant'
 import Settings from '@/pages/Settings'
@@ -23,6 +24,7 @@ function App() {
         <Routes>
           <Route element={<Layout />}>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/observability" element={<Observability />} />
             <Route path="/catalog" element={<Catalog />} />
             <Route path="/ai" element={<AIAssistant />} />
             <Route path="/settings" element={<Settings />} />

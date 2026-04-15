@@ -8,6 +8,12 @@ export interface PlatformAlert {
   detail: string
 }
 
+export interface PlatformCheck {
+  name: string
+  status: string
+  message: string
+}
+
 export interface PlatformAuditStats {
   entries: number
   last_entry_at?: string
@@ -43,6 +49,25 @@ export interface PlatformOverview {
   evidence_coverage: number
 }
 
+export interface PlatformRemediationAction {
+  priority: string
+  action: string
+  owner: string
+  effort: string
+  impact: string
+}
+
+export interface PlatformPortfolioIntelligence {
+  total_services: number
+  ready_count: number
+  watch_count: number
+  blocked_count: number
+  owner_gap_count: number
+  risk_level: string
+  high_risk_services: string[]
+  next_steps: PlatformRemediationAction[]
+}
+
 export interface PlatformStatusResponse {
   status: string
   environment: string
@@ -50,8 +75,10 @@ export interface PlatformStatusResponse {
   uptime: string
   ai_backend: string
   kubernetes_namespace: string
+  checks: PlatformCheck[]
   alerts: PlatformAlert[]
   overview: PlatformOverview
+  portfolio: PlatformPortfolioIntelligence
   services: PlatformServiceStatus[]
   audit: PlatformAuditStats
   rate_limiting: PlatformRateLimiting

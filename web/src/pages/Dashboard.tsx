@@ -75,6 +75,8 @@ export default function Dashboard() {
       : platformStatus?.status === 'degraded'
         ? 'degraded'
         : 'unhealthy'
+  const platformNextBestAction = platformStatus?.portfolio.next_steps[0] ?? null
+  const fallbackNextBestAction = workspaceSnapshot.topDecision.nextSteps[0]
 
   const formatRelativeTime = (timestamp: number) => {
     const diff = Date.now() - timestamp
@@ -172,6 +174,17 @@ export default function Dashboard() {
                 <p className="text-white/55">Blocked</p>
                 <p className="mt-1 text-xl font-semibold">{workspaceSnapshot.blockedServices}</p>
               </div>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/75">
+              <p className="text-white/55">Next best action</p>
+              <p className="mt-2 text-base font-semibold text-white">
+                {platformNextBestAction?.action ?? fallbackNextBestAction ?? 'Keep the release brief attached to the change record'}
+              </p>
+              <p className="mt-1 text-xs uppercase tracking-[0.2em] text-white/55">
+                Owner: {platformNextBestAction?.owner ?? workspaceSnapshot.topService.owner} · Effort:{' '}
+                {platformNextBestAction?.effort ?? 'small'} · Impact:{' '}
+                {platformNextBestAction?.impact ?? 'keeps audit traceability intact'}
+              </p>
             </div>
             <div className="space-y-3 rounded-2xl bg-black/20 p-4 text-sm text-white/75">
               <p className="text-white/55">Why this matters</p>
@@ -282,7 +295,18 @@ export default function Dashboard() {
           </div>
         </Card>
 
-        <Card title="Operational telemetry" subtitle="Signals surfaced directly from the running IDP">
+        <Card
+          title="Operational telemetry"
+          subtitle="Signals surfaced directly from the running IDP"
+          actions={
+            <Link
+              to="/observability"
+              className="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400"
+            >
+              Open observability
+            </Link>
+          }
+        >
           <div className="space-y-4">
             <div className="rounded-2xl bg-gray-50 p-4 dark:bg-dark-700/40">
               <p className="text-sm font-semibold text-gray-900 dark:text-white">AI backend</p>

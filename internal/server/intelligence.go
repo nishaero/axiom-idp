@@ -124,6 +124,25 @@ type serviceInsight struct {
 	NextSteps          []remediationAction `json:"next_steps"`
 }
 
+type serviceReleaseBrief struct {
+	ServiceID         string   `json:"service_id"`
+	ServiceName       string   `json:"service_name"`
+	Decision          string   `json:"decision"`
+	Summary           string   `json:"summary"`
+	ReadinessScore    int      `json:"readiness_score"`
+	EvidenceCoverage  int      `json:"evidence_coverage"`
+	MissingEvidence   []string `json:"missing_evidence"`
+	NextBestAction    string   `json:"next_best_action"`
+	NextBestOwner     string   `json:"next_best_owner"`
+	NextBestEffort    string   `json:"next_best_effort"`
+	NextBestImpact    string   `json:"next_best_impact"`
+	SupportingActions []string `json:"supporting_actions"`
+	EvidencePack      []string `json:"evidence_pack"`
+	PortfolioContext  string   `json:"portfolio_context"`
+	AssistantPrompt   string   `json:"assistant_prompt"`
+	ExportLabel       string   `json:"export_label"`
+}
+
 var demoCatalog = []demoService{
 	{
 		ID:                 "svc-auth",
@@ -523,6 +542,50 @@ func buildServiceInsight(service demoService) serviceInsight {
 	}
 }
 
+func buildReleaseBrief(service demoService, portfolio portfolioIntelligence) serviceReleaseBrief {
+	insight := buildServiceInsight(service)
+	nextBestAction := remediationAction{
+		Priority: "low",
+		Action:   "keep the evidence pack attached to the release record",
+		Owner:    service.Owner,
+		Effort:   "small",
+		Impact:   "keeps audit traceability intact",
+	}
+
+	supportingActions := make([]string, 0, len(insight.NextSteps))
+	for idx, action := range insight.NextSteps {
+		if idx == 0 {
+			nextBestAction = action
+			continue
+		}
+		supportingActions = append(supportingActions, action.Action)
+	}
+
+	evidencePack := make([]string, 0, len(insight.EvidencePack))
+	for _, item := range insight.EvidencePack {
+		evidencePack = append(evidencePack, item.Summary)
+	}
+
+	return serviceReleaseBrief{
+		ServiceID:         service.ID,
+		ServiceName:       service.Name,
+		Decision:          insight.ReleaseDecision,
+		Summary:           fmt.Sprintf("%s. %s", insight.RiskSummary, insight.OwnershipSummary),
+		ReadinessScore:    insight.ReleaseReadiness.Score,
+		EvidenceCoverage:  service.ComplianceScore,
+		MissingEvidence:   append([]string(nil), insight.MissingEvidence...),
+		NextBestAction:    nextBestAction.Action,
+		NextBestOwner:     nextBestAction.Owner,
+		NextBestEffort:    nextBestAction.Effort,
+		NextBestImpact:    nextBestAction.Impact,
+		SupportingActions: dedupeStrings(supportingActions),
+		EvidencePack:      evidencePack,
+		PortfolioContext:  fmt.Sprintf("%d ready, %d watch, %d blocked, %d owner gaps across the workspace.", portfolio.ReadyCount, portfolio.WatchCount, portfolio.BlockedCount, portfolio.OwnerGapCount),
+		AssistantPrompt:   fmt.Sprintf("Generate a release brief for %s and explain the next best action.", service.Name),
+		ExportLabel:       fmt.Sprintf("%s release brief", service.Name),
+	}
+}
+
 func buildQueryResult(query string, services []demoService, serviceID string) catalogQueryResult {
 	intent := deriveIntent(query)
 	views := buildCatalogViews(services)
@@ -552,6 +615,9 @@ func buildQueryResult(query string, services []demoService, serviceID string) ca
 	if intent == "release_readiness" && len(portfolio.HighRiskServices) > 0 {
 		result.KeyFindings = append(result.KeyFindings, fmt.Sprintf("high-risk services: %s", strings.Join(portfolio.HighRiskServices, ", ")))
 	}
+	if intent == "release_brief" && focus != nil {
+		result.KeyFindings = append(result.KeyFindings, fmt.Sprintf("release brief ready for %s", focus.Service.Name))
+	}
 
 	result.KeyFindings = dedupeStrings(result.KeyFindings)
 	return result
@@ -572,6 +638,8 @@ func matchingServicesForIntent(intent, query string, services []catalogServiceVi
 
 		switch {
 		case lowerQuery != "" && strings.Contains(searchSpace, lowerQuery):
+			matches = append(matches, service)
+		case intent == "release_brief" && (service.Intelligence.ReleaseReadiness.State != "ready" || service.Intelligence.OwnershipDrift.State == "drift"):
 			matches = append(matches, service)
 		case intent == "release_readiness" && service.Intelligence.ReleaseReadiness.State != "ready":
 			matches = append(matches, service)
@@ -611,6 +679,8 @@ func resolveServiceView(query, serviceID string, services []catalogServiceView) 
 func deriveIntent(query string) string {
 	lower := strings.ToLower(strings.TrimSpace(query))
 	switch {
+	case containsAny(lower, "brief", "decision pack", "operator brief", "release brief"):
+		return "release_brief"
 	case containsAny(lower, "evidence", "audit", "compliance", "bsi c5", "attestation", "control"):
 		return "evidence_pack"
 	case containsAny(lower, "owner", "ownership", "drift", "accountable", "team"):

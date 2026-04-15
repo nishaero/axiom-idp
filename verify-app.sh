@@ -110,6 +110,20 @@ else
   fail "AI query payload: ${ai_payload}"
 fi
 
+observability_payload=$(request GET "${BASE_URL}/api/v1/platform/observability")
+if printf '%s' "$observability_payload" | grep -q '"metrics_endpoint":"\/metrics"'; then
+  pass "Observability snapshot responds"
+else
+  fail "Observability payload: ${observability_payload}"
+fi
+
+metrics_payload=$(request GET "${BASE_URL}/metrics")
+if printf '%s' "$metrics_payload" | grep -q 'axiom_http_requests_total'; then
+  pass "Prometheus metrics endpoint responds"
+else
+  fail "Metrics payload missing axiom_http_requests_total"
+fi
+
 front_payload=$(request GET "${FRONTEND_URL}/")
 if printf '%s' "$front_payload" | grep -qi '<html\|axiom\|dashboard'; then
   pass "Frontend responds"
@@ -117,7 +131,7 @@ else
   fail "Frontend payload did not look like HTML"
 fi
 
-headers=$(curl -fsS -D - -o /dev/null "${BASE_URL}/health")
+headers=$(curl -fsS -D - -o /dev/null "${BASE_URL}/ready")
 if printf '%s' "$headers" | grep -qi 'x-frame-options\|x-content-type-options\|content-security-policy'; then
   pass "Security headers present"
 else

@@ -1,6 +1,6 @@
 # Axiom IDP - Project Status
 
-Updated: 2026-04-14
+Updated: 2026-04-15
 Branch: `feat/production-delivery-baseline`
 
 ## Executive Summary
@@ -41,6 +41,7 @@ Backend:
 - signed token auth and RBAC
 - security headers, audit logging, and rate limiting
 - `/live`, `/ready`, `/health`, and `/api/v1/platform/status`
+- `/metrics` Prometheus-style telemetry export and `/api/v1/platform/observability`
 - catalog overview, service analysis, and AI query endpoints
 - direct Kubernetes deployment flow
 - GitHub-backed Argo CD deployment flow
@@ -49,7 +50,9 @@ Backend:
 Frontend:
 
 - decision-oriented dashboard
+- dedicated observability view with endpoint checks and telemetry counters
 - service catalog with release-readiness drilldown
+- release briefs with exportable evidence packs and next-best-action guidance
 - AI assistant with deployment and infrastructure workflow tracking
 - settings and governance UX
 - live platform status surface backed by the API

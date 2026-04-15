@@ -23,6 +23,7 @@ type Server struct {
 	logger      *logrus.Logger
 	router      *mux.Router
 	http        *http.Server
+	metrics     *Metrics
 	authManager *auth.Manager
 	rbac        *auth.RBAC
 	auditor     *Auditor
@@ -35,10 +36,12 @@ type Server struct {
 
 // New creates a new server instance.
 func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
+	metrics := newMetrics()
 	s := &Server{
 		config:      cfg,
 		logger:      logger,
 		router:      mux.NewRouter(),
+		metrics:     metrics,
 		authManager: auth.NewManager(cfg.SessionSecret),
 		rbac:        auth.NewRBAC(),
 		auditor:     NewAuditor(),
@@ -49,6 +52,8 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 		startedAt:   time.Now().UTC(),
 	}
 
+	s.auditor.SetMetrics(metrics)
+	s.rateLimiter.SetMetrics(metrics)
 	s.setupRoutes()
 
 	writeTimeout := 15 * time.Second
@@ -76,11 +81,13 @@ func (s *Server) setupRoutes() {
 	s.router.Use(SecurityHeaders)
 	s.router.Use(s.corsMiddleware)
 	s.router.Use(s.loggingMiddleware)
+	s.router.Use(s.metrics.Middleware)
 	s.router.Use(s.rateLimiter.Middleware)
 
 	s.router.HandleFunc("/health", s.handleHealth).Methods(http.MethodGet)
 	s.router.HandleFunc("/live", s.handleLive).Methods(http.MethodGet)
 	s.router.HandleFunc("/ready", s.handleReady).Methods(http.MethodGet)
+	s.router.HandleFunc("/metrics", s.handleMetrics).Methods(http.MethodGet)
 
 	api := s.router.PathPrefix("/api/v1").Subrouter()
 	api.Use(s.authMiddleware)
@@ -92,6 +99,7 @@ func (s *Server) setupRoutes() {
 	api.Handle("/catalog/services/{id}", s.rbac.Middleware("catalog", "read")(http.HandlerFunc(s.handleServiceInsight))).Methods(http.MethodGet)
 	api.Handle("/catalog/services/{id}/analysis", s.rbac.Middleware("catalog", "read")(http.HandlerFunc(s.handleServiceInsight))).Methods(http.MethodGet)
 	api.Handle("/platform/status", s.rbac.Middleware("catalog", "read")(http.HandlerFunc(s.handlePlatformStatus))).Methods(http.MethodGet)
+	api.Handle("/platform/observability", s.rbac.Middleware("catalog", "read")(http.HandlerFunc(s.handleObservability))).Methods(http.MethodGet)
 	api.Handle("/deployments/applications", s.rbac.Middleware("services", "deploy")(http.HandlerFunc(s.handleApplyDeployment))).Methods(http.MethodPost)
 	api.Handle("/deployments/applications/{namespace}/{name}", s.rbac.Middleware("services", "read")(http.HandlerFunc(s.handleDeploymentStatus))).Methods(http.MethodGet)
 
@@ -114,6 +122,10 @@ func (s *Server) Shutdown(ctx context.Context) error {
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	status := s.buildPlatformStatus()
+	if s.metrics != nil {
+		s.metrics.UpdatePlatformSnapshot(status)
+		s.metrics.UpdateOperationalSnapshots(status.Audit, status.RateLimiting)
+	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"status":     status.Status,
 		"started_at": status.StartedAt,
@@ -132,7 +144,6 @@ func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
 	if readyStatus != statusReady {
 		httpStatus = http.StatusServiceUnavailable
 	}
-
 	writeJSON(w, httpStatus, map[string]interface{}{
 		"status": readyStatus,
 		"checks": checks,
@@ -184,18 +195,34 @@ func (s *Server) handleCatalogOverview(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handlePlatformStatus(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, s.buildPlatformStatus())
+	status := s.buildPlatformStatus()
+	if s.metrics != nil {
+		s.metrics.UpdatePlatformSnapshot(status)
+		s.metrics.UpdateOperationalSnapshots(status.Audit, status.RateLimiting)
+	}
+	writeJSON(w, http.StatusOK, status)
+}
+
+func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
+	if s.metrics == nil {
+		http.Error(w, "metrics unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
+	s.metrics.Handler().ServeHTTP(w, r)
 }
 
 func (s *Server) handleServiceInsight(w http.ResponseWriter, r *http.Request) {
 	serviceID := strings.TrimSpace(mux.Vars(r)["id"])
+	portfolio := buildPortfolioIntelligence(demoCatalog)
 	for _, service := range demoCatalog {
 		if service.ID == serviceID {
 			writeJSON(w, http.StatusOK, map[string]interface{}{
 				"service":   buildCatalogView(service),
 				"insight":   buildServiceInsight(service),
-				"portfolio": buildPortfolioIntelligence(demoCatalog),
+				"portfolio": portfolio,
 				"overview":  catalogSummary(demoCatalog),
+				"brief":     buildReleaseBrief(service, portfolio),
 				"analysis":  buildQueryResult(service.Name, demoCatalog, service.ID),
 			})
 			return
@@ -225,6 +252,7 @@ func (s *Server) handleAIQuery(w http.ResponseWriter, r *http.Request) {
 
 	userID := auth.UserIDFromContext(r.Context())
 	roles := auth.RolesFromContext(r.Context())
+	queryResult := buildQueryResult(payload.Query, demoCatalog, payload.ServiceID)
 	ctx, cancel := newAIRequestContext(r.Context(), s.config.AITimeout)
 	defer cancel()
 
@@ -234,7 +262,16 @@ func (s *Server) handleAIQuery(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		operationStart := time.Now()
 		record, err := s.gitops.ApplyArgoCDDeployment(ctx, req)
+		if s.metrics != nil {
+			outcome := "success"
+			if err != nil {
+				outcome = "error"
+			}
+			s.metrics.RecordDeploymentRequest("argocd", "apply", time.Since(operationStart), outcome)
+			s.metrics.RecordAIRequest("gitops-argocd", "deployment_apply_argocd", time.Since(operationStart), outcome)
+		}
 		if err != nil {
 			s.writeError(w, http.StatusBadGateway, err.Error())
 			return
@@ -248,6 +285,9 @@ func (s *Server) handleAIQuery(w http.ResponseWriter, r *http.Request) {
 			"roles":             roles,
 			"intent":            "deployment_apply_argocd",
 			"deployment":        record,
+			"execution_plan":    record.ExecutionPlan,
+			"execution_state":   record.ExecutionState,
+			"action_plan":       buildActionPlan(withIntent(queryResult, "deployment_apply_argocd"), record, nil),
 			"generated_text":    fmt.Sprintf("Created GitHub delivery branch %s and Argo CD application %s.", record.Revision, record.ApplicationName),
 			"delivery_provider": "argocd",
 		})
@@ -260,7 +300,16 @@ func (s *Server) handleAIQuery(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		operationStart := time.Now()
 		record, err := s.gitops.ArgoCDDeploymentStatus(ctx, namespace, name)
+		if s.metrics != nil {
+			outcome := "success"
+			if err != nil {
+				outcome = "error"
+			}
+			s.metrics.RecordDeploymentRequest("argocd", "status", time.Since(operationStart), outcome)
+			s.metrics.RecordAIRequest("gitops-argocd", "deployment_status_argocd", time.Since(operationStart), outcome)
+		}
 		if err != nil {
 			s.writeError(w, http.StatusBadGateway, err.Error())
 			return
@@ -274,6 +323,9 @@ func (s *Server) handleAIQuery(w http.ResponseWriter, r *http.Request) {
 			"roles":             roles,
 			"intent":            "deployment_status_argocd",
 			"deployment":        record,
+			"execution_plan":    record.ExecutionPlan,
+			"execution_state":   record.ExecutionState,
+			"action_plan":       buildActionPlan(withIntent(queryResult, "deployment_status_argocd"), record, nil),
 			"generated_text":    record.Message,
 			"delivery_provider": "argocd",
 		})
@@ -286,21 +338,33 @@ func (s *Server) handleAIQuery(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		operationStart := time.Now()
 		record, err := s.deployer.Apply(ctx, req)
+		if s.metrics != nil {
+			outcome := "success"
+			if err != nil {
+				outcome = "error"
+			}
+			s.metrics.RecordDeploymentRequest("kubernetes", "apply", time.Since(operationStart), outcome)
+			s.metrics.RecordAIRequest("deployment-control-plane", "deployment_apply", time.Since(operationStart), outcome)
+		}
 		if err != nil {
 			s.writeError(w, http.StatusBadGateway, err.Error())
 			return
 		}
 
 		writeJSON(w, http.StatusOK, map[string]interface{}{
-			"response":       fmt.Sprintf("Deployment %s is %s in namespace %s with %d/%d ready replicas.", record.Name, record.Phase, record.Namespace, record.ReadyReplicas, record.Replicas),
-			"backend":        "deployment-control-plane",
-			"query":          payload.Query,
-			"user_id":        userID,
-			"roles":          roles,
-			"intent":         "deployment_apply",
-			"deployment":     record,
-			"generated_text": fmt.Sprintf("Applied deployment %s using image %s and service type %s.", record.Name, record.Image, record.ServiceType),
+			"response":        fmt.Sprintf("Deployment %s is %s in namespace %s with %d/%d ready replicas.", record.Name, record.Phase, record.Namespace, record.ReadyReplicas, record.Replicas),
+			"backend":         "deployment-control-plane",
+			"query":           payload.Query,
+			"user_id":         userID,
+			"roles":           roles,
+			"intent":          "deployment_apply",
+			"deployment":      record,
+			"execution_plan":  record.ExecutionPlan,
+			"execution_state": record.ExecutionState,
+			"action_plan":     buildActionPlan(withIntent(queryResult, "deployment_apply"), record, nil),
+			"generated_text":  fmt.Sprintf("Applied deployment %s using image %s and service type %s.", record.Name, record.Image, record.ServiceType),
 		})
 		return
 	}
@@ -311,21 +375,33 @@ func (s *Server) handleAIQuery(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		operationStart := time.Now()
 		record, err := s.deployer.Status(ctx, namespace, name)
+		if s.metrics != nil {
+			outcome := "success"
+			if err != nil {
+				outcome = "error"
+			}
+			s.metrics.RecordDeploymentRequest("kubernetes", "status", time.Since(operationStart), outcome)
+			s.metrics.RecordAIRequest("deployment-control-plane", "deployment_status", time.Since(operationStart), outcome)
+		}
 		if err != nil {
 			s.writeError(w, http.StatusBadGateway, err.Error())
 			return
 		}
 
 		writeJSON(w, http.StatusOK, map[string]interface{}{
-			"response":       fmt.Sprintf("Deployment %s is %s in namespace %s with %d/%d ready replicas.", record.Name, record.Phase, record.Namespace, record.ReadyReplicas, record.Replicas),
-			"backend":        "deployment-control-plane",
-			"query":          payload.Query,
-			"user_id":        userID,
-			"roles":          roles,
-			"intent":         "deployment_status",
-			"deployment":     record,
-			"generated_text": record.Message,
+			"response":        fmt.Sprintf("Deployment %s is %s in namespace %s with %d/%d ready replicas.", record.Name, record.Phase, record.Namespace, record.ReadyReplicas, record.Replicas),
+			"backend":         "deployment-control-plane",
+			"query":           payload.Query,
+			"user_id":         userID,
+			"roles":           roles,
+			"intent":          "deployment_status",
+			"deployment":      record,
+			"execution_plan":  record.ExecutionPlan,
+			"execution_state": record.ExecutionState,
+			"action_plan":     buildActionPlan(withIntent(queryResult, "deployment_status"), record, nil),
+			"generated_text":  record.Message,
 		})
 		return
 	}
@@ -336,7 +412,16 @@ func (s *Server) handleAIQuery(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		operationStart := time.Now()
 		record, err := s.gitops.ApplyInfrastructure(ctx, req)
+		if s.metrics != nil {
+			outcome := "success"
+			if err != nil {
+				outcome = "error"
+			}
+			s.metrics.RecordDeploymentRequest(req.Provider, "infrastructure_apply", time.Since(operationStart), outcome)
+			s.metrics.RecordAIRequest("gitops-infrastructure", "infrastructure_apply_"+req.Provider, time.Since(operationStart), outcome)
+		}
 		if err != nil {
 			s.writeError(w, http.StatusBadGateway, err.Error())
 			return
@@ -350,13 +435,16 @@ func (s *Server) handleAIQuery(w http.ResponseWriter, r *http.Request) {
 			"roles":                roles,
 			"intent":               "infrastructure_apply_" + record.Provider,
 			"infrastructure":       record,
+			"execution_plan":       record.ExecutionPlan,
+			"execution_state":      record.ExecutionState,
+			"action_plan":          buildActionPlan(withIntent(queryResult, "infrastructure_apply_"+record.Provider), nil, record),
 			"generated_text":       record.Message,
 			"infrastructure_stack": record.Provider,
 		})
 		return
 	}
 
-	queryResult := buildQueryResult(payload.Query, demoCatalog, payload.ServiceID)
+	aiStart := time.Now()
 	answer, source := queryAI(ctx, s.aiBackend, aiQueryRequest{
 		Query:     payload.Query,
 		Services:  demoCatalog,
@@ -366,6 +454,13 @@ func (s *Server) handleAIQuery(w http.ResponseWriter, r *http.Request) {
 		UserID:    userID,
 		Roles:     roles,
 	}, s.logger)
+	if s.metrics != nil {
+		outcome := "success"
+		if strings.TrimSpace(answer) == "" {
+			outcome = "error"
+		}
+		s.metrics.RecordAIRequest(source, queryResult.Intent, time.Since(aiStart), outcome)
+	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"response":          answer,
@@ -383,10 +478,12 @@ func (s *Server) handleAIQuery(w http.ResponseWriter, r *http.Request) {
 		"next_steps":        queryResult.NextSteps,
 		"key_findings":      queryResult.KeyFindings,
 		"generated_text":    answer,
+		"action_plan":       buildActionPlan(queryResult, nil, nil),
 	})
 }
 
 func (s *Server) handleApplyDeployment(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 	var req deploymentApplyRequest
 	if err := decodeJSONBody(r.Body, &req); err != nil && !errors.Is(err, io.EOF) {
 		s.writeError(w, http.StatusBadRequest, "invalid deployment request")
@@ -394,6 +491,13 @@ func (s *Server) handleApplyDeployment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	record, err := s.deployer.Apply(r.Context(), req)
+	if s.metrics != nil {
+		outcome := "success"
+		if err != nil {
+			outcome = "error"
+		}
+		s.metrics.RecordDeploymentRequest("kubernetes", "apply", time.Since(start), outcome)
+	}
 	if err != nil {
 		s.writeError(w, http.StatusBadGateway, err.Error())
 		return
@@ -405,8 +509,16 @@ func (s *Server) handleApplyDeployment(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDeploymentStatus(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 	vars := mux.Vars(r)
 	record, err := s.deployer.Status(r.Context(), vars["namespace"], vars["name"])
+	if s.metrics != nil {
+		outcome := "success"
+		if err != nil {
+			outcome = "error"
+		}
+		s.metrics.RecordDeploymentRequest("kubernetes", "status", time.Since(start), outcome)
+	}
 	if err != nil {
 		s.writeError(w, http.StatusBadGateway, err.Error())
 		return

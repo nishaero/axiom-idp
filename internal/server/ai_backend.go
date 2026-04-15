@@ -71,6 +71,26 @@ func (localAIBackend) Query(ctx context.Context, request aiQueryRequest) (string
 	}
 
 	switch {
+	case strings.Contains(queryLower, "brief"), strings.Contains(queryLower, "decision pack"), strings.Contains(queryLower, "operator brief"):
+		if request.Focus != nil {
+			return fmt.Sprintf(
+				"Release brief for %s: %s. Next best action: %s. Evidence pack contains %d items. Portfolio context: %d ready, %d blocked, %d owner gaps.",
+				request.Focus.Service.Name,
+				request.Focus.Intelligence.ReleaseReadiness.Reason,
+				renderActionList(request.Focus.Intelligence.NextSteps, 1),
+				len(request.Focus.Intelligence.EvidencePack),
+				request.Portfolio.ReadyCount,
+				request.Portfolio.BlockedCount,
+				request.Portfolio.OwnerGapCount,
+			), "local", nil
+		}
+		return fmt.Sprintf(
+			"Generate a release brief from the catalog: %d services are indexed, %d are ready, %d need attention, and %d are blocked.",
+			request.Portfolio.TotalServices,
+			request.Portfolio.ReadyCount,
+			request.Portfolio.WatchCount,
+			request.Portfolio.BlockedCount,
+		), "local", nil
 	case strings.Contains(queryLower, "bsi c5"), strings.Contains(queryLower, "compliance"), strings.Contains(queryLower, "evidence"):
 		if request.Focus != nil {
 			return fmt.Sprintf("%s is %s with %d required evidence items. Review the evidence pack, confirm ownership, and attach the audit artifacts before approval.", request.Focus.Service.Name, request.Focus.Intelligence.ReleaseReadiness.State, len(request.Focus.Intelligence.EvidencePack)), "local", nil
@@ -182,6 +202,7 @@ Known services:
 Instructions:
 - Answer concisely.
 - Focus on deployment readiness, release risk, ownership, security posture, and compliance evidence.
+- If the question asks for a release brief, provide the decision, missing evidence, and the next best action in one concise answer.
 - If the question asks for an action, give concrete next steps.
 - Use the structured analysis as the source of truth.
 

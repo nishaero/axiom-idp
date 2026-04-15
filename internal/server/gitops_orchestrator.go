@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -32,6 +33,7 @@ type infrastructureRecord struct {
 	Phase           string            `json:"phase"`
 	Message         string            `json:"message"`
 	Executed        bool              `json:"executed"`
+	ExecutionState  string            `json:"execution_state,omitempty"`
 	RepoURL         string            `json:"repo_url,omitempty"`
 	Revision        string            `json:"revision,omitempty"`
 	Path            string            `json:"path,omitempty"`
@@ -40,6 +42,8 @@ type infrastructureRecord struct {
 	HealthStatus    string            `json:"health_status,omitempty"`
 	Artifacts       []string          `json:"artifacts,omitempty"`
 	Outputs         map[string]string `json:"outputs,omitempty"`
+	Inputs          map[string]string `json:"inputs,omitempty"`
+	ExecutionPlan   *executionPlan    `json:"execution_plan,omitempty"`
 }
 
 type gitOpsOrchestrator struct {
@@ -119,6 +123,8 @@ func (o *gitOpsOrchestrator) ApplyArgoCDDeployment(ctx context.Context, req depl
 	status.Path = gitCtx.Path
 	status.ApplicationName = gitCtx.ApplicationName
 	status.Delivery = "github-argocd"
+	status.ExecutionPlan = newDeploymentExecutionPlan("deployment_apply_argocd", spec)
+	status.ExecutionState = status.Phase
 	return status, nil
 }
 
@@ -134,6 +140,12 @@ func (o *gitOpsOrchestrator) ArgoCDDeploymentStatus(ctx context.Context, namespa
 		record.ApplicationName = appStatus.Name
 	}
 	record.Delivery = "github-argocd"
+	record.ExecutionPlan = newDeploymentExecutionPlan("deployment_status_argocd", deploymentApplyRequest{
+		Namespace: namespace,
+		Name:      name,
+		Delivery:  "argocd",
+	})
+	record.ExecutionState = record.Phase
 	return record, nil
 }
 
@@ -161,10 +173,13 @@ func (o *gitOpsOrchestrator) ApplyInfrastructure(ctx context.Context, req infras
 		Phase:           "staged",
 		Message:         fmt.Sprintf("%s infrastructure request staged in GitHub and awaiting controller execution.", strings.Title(spec.Provider)),
 		Executed:        false,
+		ExecutionState:  "staged",
+		Inputs:          spec.Inputs,
 		RepoURL:         gitCtx.RepoHTTPSURL,
 		Revision:        gitCtx.Branch,
 		Path:            gitCtx.Path,
 		ApplicationName: gitCtx.ApplicationName,
+		ExecutionPlan:   newInfrastructureExecutionPlan("infrastructure_apply_"+spec.Provider, spec),
 	}
 
 	var files map[string]string
@@ -175,6 +190,7 @@ func (o *gitOpsOrchestrator) ApplyInfrastructure(ctx context.Context, req infras
 	case "crossplane":
 		files = renderCrossplaneInfraFiles(spec)
 		record.Message = fmt.Sprintf("Crossplane infrastructure request for %s staged in GitHub. Crossplane controllers must be available before execution.", spec.TargetNamespace)
+		record.ExecutionState = "awaiting_crossplane_reconciliation"
 	default:
 		return nil, fmt.Errorf("unsupported infrastructure provider %s", spec.Provider)
 	}
@@ -202,13 +218,23 @@ func (o *gitOpsOrchestrator) ApplyInfrastructure(ctx context.Context, req infras
 		status.Revision = gitCtx.Branch
 		status.Path = gitCtx.Path
 		status.ApplicationName = gitCtx.ApplicationName
+		status.ExecutionPlan = newInfrastructureExecutionPlan("infrastructure_apply_terraform", spec)
+		status.ExecutionState = status.Phase
+		status.Inputs = spec.Inputs
 		return status, nil
 	}
 
+	if err := o.applyArgoCDApplication(ctx, gitCtx, spec.TargetNamespace); err != nil {
+		return nil, err
+	}
 	appStatus, _ := o.getApplicationStatus(ctx, gitCtx.ApplicationName)
 	if appStatus != nil {
 		record.SyncStatus = appStatus.SyncStatus
 		record.HealthStatus = appStatus.HealthStatus
+		record.ExecutionState = strings.ToLower(strings.TrimSpace(appStatus.SyncStatus))
+		if record.ExecutionState == "" {
+			record.ExecutionState = "staged"
+		}
 	}
 	return record, nil
 }
@@ -243,6 +269,16 @@ func (o *gitOpsOrchestrator) TerraformInfrastructureStatus(ctx context.Context, 
 		Outputs: map[string]string{
 			"job": job.Metadata.Name,
 		},
+		ExecutionState: func() string {
+			switch {
+			case job.Status.Succeeded > 0:
+				return "ready"
+			case job.Status.Failed > 0:
+				return "failed"
+			default:
+				return "progressing"
+			}
+		}(),
 	}
 	switch {
 	case job.Status.Succeeded > 0:
@@ -259,6 +295,12 @@ func (o *gitOpsOrchestrator) TerraformInfrastructureStatus(ctx context.Context, 
 		record.SyncStatus = appStatus.SyncStatus
 		record.HealthStatus = appStatus.HealthStatus
 	}
+	record.ExecutionPlan = newInfrastructureExecutionPlan("infrastructure_status_terraform", infrastructureApplyRequest{
+		Name:            name,
+		Provider:        "terraform",
+		TargetNamespace: normalizeKubernetesName(name),
+		Inputs:          map[string]string{},
+	})
 	return record, nil
 }
 
@@ -359,10 +401,6 @@ spec:
     syncOptions:
       - CreateNamespace=true
 `, gitCtx.ApplicationName, argoNS, project, gitCtx.RepoHTTPSURL, gitCtx.Branch, gitCtx.Path, destinationNamespace)
-
-	if _, err := runCommand(ctx, "", "kubectl", "apply", "-f", "-"); err == nil {
-		// unreachable because stdin not passed in helper
-	}
 
 	cmd := exec.CommandContext(ctx, "kubectl", "apply", "-f", "-")
 	cmd.Stdin = strings.NewReader(manifest)
@@ -679,6 +717,7 @@ spec:
 }
 
 func renderCrossplaneInfraFiles(req infrastructureApplyRequest) map[string]string {
+	inputs := renderJSON(req.Inputs)
 	return map[string]string{
 		"README.md": fmt.Sprintf(`# Crossplane Infrastructure Request
 
@@ -687,31 +726,41 @@ This request was generated by Axiom IDP AI.
 - Name: %s
 - Target namespace: %s
 - Provider: crossplane
+- Inputs: %s
 
 Execution requires Crossplane and an installed provider/configuration in the target cluster.
-`, req.Name, req.TargetNamespace),
-		"claim.yaml": fmt.Sprintf(`apiVersion: apiextensions.crossplane.io/v1
-kind: CompositeResourceDefinition
+`, req.Name, req.TargetNamespace, inputs),
+		"claim.yaml": fmt.Sprintf(`apiVersion: platform.axiom.dev/v1alpha1
+kind: %sClaim
 metadata:
-  name: %s.platform.axiom.dev
+  name: %s
+  namespace: %s
 spec:
-  group: platform.axiom.dev
-  names:
-    kind: %s
-    plural: %ss
-  versions:
-    - name: v1alpha1
-      served: true
-      referenceable: true
-      schema:
-        openAPIV3Schema:
-          type: object
-          properties:
-            spec:
-              type: object
-`, req.Name, strings.Title(req.Name), strings.ToLower(req.Name)),
+  targetNamespace: %s
+  provider: crossplane
+  parameters:
+%s
+`, strings.Title(req.Name), req.Name, req.TargetNamespace, req.TargetNamespace, indentYAMLMap(req.Inputs, 4)),
 		"kustomization.yaml": "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n- claim.yaml\n",
 	}
+}
+
+func indentYAMLMap(values map[string]string, spaces int) string {
+	indent := strings.Repeat(" ", spaces)
+	if len(values) == 0 {
+		return indent + "{}"
+	}
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	lines := make([]string, 0, len(values))
+	for _, key := range keys {
+		lines = append(lines, fmt.Sprintf("%s%s: %q", indent, key, values[key]))
+	}
+	return strings.Join(lines, "\n")
 }
 
 func writeFiles(dir string, files map[string]string) error {

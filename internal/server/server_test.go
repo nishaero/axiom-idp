@@ -47,11 +47,17 @@ func TestServerHealth(t *testing.T) {
 
 func TestServerReady(t *testing.T) {
 	cfg := &config.Config{
-		Port:          8080,
-		Environment:   "test",
-		LogLevel:      "info",
-		SessionSecret: "test-secret",
-		AIBackend:     "local",
+		Port:              8080,
+		Environment:       "test",
+		LogLevel:          "info",
+		SessionSecret:     "test-secret",
+		SessionMaxAge:     86400,
+		CORSOrigins:       []string{"http://localhost:3000"},
+		RateLimitRequests: 100,
+		RateLimitWindow:   time.Minute,
+		AIBackend:         "local",
+		AITimeout:         5 * time.Second,
+		AIMaxTokens:       128,
 	}
 
 	logger := logrus.New()
@@ -193,6 +199,13 @@ func TestRateLimiter(t *testing.T) {
 	if w.Code != http.StatusTooManyRequests {
 		t.Fatalf("Expected status 429, got %d", w.Code)
 	}
+
+	req = httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	w = httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected /metrics to bypass rate limiting, got %d", w.Code)
+	}
 }
 
 func TestAuditMiddleware(t *testing.T) {
@@ -302,6 +315,49 @@ func TestHandleAIQueryLocalBackend(t *testing.T) {
 	actions, ok := resp["next_steps"].([]interface{})
 	if !ok || len(actions) == 0 {
 		t.Fatal("Expected structured AI actions")
+	}
+}
+
+func TestHandleAIQueryReleaseBrief(t *testing.T) {
+	cfg := &config.Config{
+		Port:              8080,
+		Environment:       "test",
+		LogLevel:          "info",
+		SessionSecret:     "test-secret",
+		SessionMaxAge:     86400,
+		CORSOrigins:       []string{"http://localhost:3000"},
+		RateLimitRequests: 100,
+		RateLimitWindow:   time.Minute,
+		AIBackend:         "local",
+		AITimeout:         5 * time.Second,
+		AIMaxTokens:       128,
+	}
+
+	logger := logrus.New()
+	server, err := New(cfg, logger)
+	if err != nil {
+		t.Fatalf("Failed to create server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/ai/query", strings.NewReader(`{"query":"generate a release brief for payments-api"}`))
+	req = req.WithContext(auth.ContextWithUser(req.Context(), "user-1", []string{auth.RoleViewer}))
+	w := httptest.NewRecorder()
+	server.handleAIQuery(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected 200, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("Failed to parse response: %v", err)
+	}
+
+	if resp["intent"] != "release_brief" {
+		t.Fatalf("Expected release_brief intent, got %v", resp["intent"])
+	}
+	if resp["response"] == "" {
+		t.Fatal("Expected non-empty release brief response")
 	}
 }
 
@@ -560,6 +616,17 @@ func TestServiceInsightEndpoint(t *testing.T) {
 	if readiness["state"] != "blocked" {
 		t.Fatalf("Expected blocked insight, got %v", readiness["state"])
 	}
+
+	brief, ok := resp["brief"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("Expected release brief, got %v", resp["brief"])
+	}
+	if brief["next_best_action"] == "" {
+		t.Fatal("Expected next best action in release brief")
+	}
+	if brief["portfolio_context"] == "" {
+		t.Fatal("Expected portfolio context in release brief")
+	}
 }
 
 type fakeDeploymentManager struct {
@@ -773,6 +840,13 @@ func TestHandleAIQueryDeploymentApply(t *testing.T) {
 	if resp["deployment"] == nil {
 		t.Fatal("Expected deployment payload")
 	}
+	actionPlan, ok := resp["action_plan"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("Expected action plan payload, got %T", resp["action_plan"])
+	}
+	if actionPlan["mode"] != "delivery" {
+		t.Fatalf("Expected delivery action plan mode, got %v", actionPlan["mode"])
+	}
 }
 
 func TestHandleAIQueryDeploymentApplyForbidden(t *testing.T) {
@@ -906,6 +980,14 @@ func TestHandleAIQueryArgoCDDeploymentApply(t *testing.T) {
 			ApplicationName: "demo-web",
 			SyncStatus:      "Synced",
 			HealthStatus:    "Healthy",
+			ExecutionState:  "ready",
+			ExecutionPlan: &executionPlan{
+				Intent:    "deployment_apply_argocd",
+				Provider:  "argocd",
+				Route:     "github-argocd-kubernetes",
+				Mode:      "controller-backed",
+				Supported: true,
+			},
 		},
 	}
 
@@ -924,6 +1006,20 @@ func TestHandleAIQueryArgoCDDeploymentApply(t *testing.T) {
 	}
 	if resp["intent"] != "deployment_apply_argocd" {
 		t.Fatalf("Expected deployment_apply_argocd intent, got %v", resp["intent"])
+	}
+	executionPlan, ok := resp["execution_plan"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("Expected execution plan payload, got %T", resp["execution_plan"])
+	}
+	if executionPlan["route"] != "github-argocd-kubernetes" {
+		t.Fatalf("Expected Argo CD route, got %v", executionPlan["route"])
+	}
+	actionPlan, ok := resp["action_plan"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("Expected action plan payload, got %T", resp["action_plan"])
+	}
+	if actionPlan["title"] != "AI-guided GitOps rollout" {
+		t.Fatalf("Expected GitOps action plan title, got %v", actionPlan["title"])
 	}
 }
 
@@ -1016,6 +1112,14 @@ func TestHandleAIQueryInfrastructureTerraform(t *testing.T) {
 			ApplicationName: "infra-platform-lab",
 			SyncStatus:      "Synced",
 			HealthStatus:    "Healthy",
+			ExecutionState:  "ready",
+			ExecutionPlan: &executionPlan{
+				Intent:    "infrastructure_apply_terraform",
+				Provider:  "terraform",
+				Route:     "github-argocd-terraform-job",
+				Mode:      "controller-backed",
+				Supported: true,
+			},
 		},
 	}
 
@@ -1034,5 +1138,73 @@ func TestHandleAIQueryInfrastructureTerraform(t *testing.T) {
 	}
 	if resp["intent"] != "infrastructure_apply_terraform" {
 		t.Fatalf("Expected infrastructure_apply_terraform intent, got %v", resp["intent"])
+	}
+	executionPlan, ok := resp["execution_plan"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("Expected execution plan payload, got %T", resp["execution_plan"])
+	}
+	if executionPlan["route"] != "github-argocd-terraform-job" {
+		t.Fatalf("Expected Terraform route, got %v", executionPlan["route"])
+	}
+	actionPlan, ok := resp["action_plan"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("Expected action plan payload, got %T", resp["action_plan"])
+	}
+	if actionPlan["mode"] != "infrastructure" {
+		t.Fatalf("Expected infrastructure action plan mode, got %v", actionPlan["mode"])
+	}
+}
+
+func TestDeploymentNormalizeAndPlan(t *testing.T) {
+	req, err := normalizeDeploymentRequest(deploymentApplyRequest{
+		Name:      "Demo Web",
+		Namespace: "Apps",
+		Image:     "nginx:1.27-alpine",
+		Delivery:  "GitHub-Argocd",
+	}, "axiom-default")
+	if err != nil {
+		t.Fatalf("Expected normalized deployment request, got error: %v", err)
+	}
+
+	if req.Delivery != "argocd" {
+		t.Fatalf("Expected argocd delivery, got %q", req.Delivery)
+	}
+	plan := newDeploymentExecutionPlan("deployment_apply_argocd", req)
+	if plan.Route != "github-argocd-kubernetes" {
+		t.Fatalf("Expected Argo CD route, got %q", plan.Route)
+	}
+	if plan.Mode != "controller-backed" {
+		t.Fatalf("Expected controller-backed mode, got %q", plan.Mode)
+	}
+}
+
+func TestInfrastructureCrossplanePlanAndBundle(t *testing.T) {
+	req, err := normalizeInfrastructureRequest(infrastructureApplyRequest{
+		Name:            "platform-lab",
+		Provider:        "Crossplane",
+		TargetNamespace: "platform-lab",
+		Inputs: map[string]string{
+			"region": "eu-central-1",
+			"size":   "small",
+		},
+	})
+	if err != nil {
+		t.Fatalf("Expected normalized infrastructure request, got error: %v", err)
+	}
+
+	plan := newInfrastructureExecutionPlan("infrastructure_apply_crossplane", req)
+	if plan.Route != "github-argocd-crossplane-controller" {
+		t.Fatalf("Expected Crossplane route, got %q", plan.Route)
+	}
+	if plan.Mode != "staged" {
+		t.Fatalf("Expected staged mode, got %q", plan.Mode)
+	}
+
+	files := renderCrossplaneInfraFiles(req)
+	if got := files["README.md"]; !strings.Contains(got, "Inputs:") {
+		t.Fatalf("Expected Crossplane README to include inputs, got %q", got)
+	}
+	if got := files["claim.yaml"]; !strings.Contains(got, "region: \"eu-central-1\"") {
+		t.Fatalf("Expected Crossplane claim to include inputs, got %q", got)
 	}
 }

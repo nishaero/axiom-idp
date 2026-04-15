@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Card, ProgressBar, StatusBadge } from '@/components/dashboard'
+import { useServiceReleaseBrief } from '@/hooks/useServiceReleaseBrief'
 import { demoCatalogServices } from '@/lib/demoContent'
 import type { DemoCatalogService } from '@/lib/demoContent'
 import {
+  buildReleaseBrief,
   buildAssistantPrompts,
   getReleaseDecision,
   getWorkspaceSnapshot,
@@ -65,6 +67,16 @@ export default function Catalog() {
     filteredServices[0] ??
     null
   const selectedDecision = selectedService ? serviceDecisions.get(selectedService.id) ?? getReleaseDecision(selectedService) : null
+  const { data: liveReleaseBrief } = useServiceReleaseBrief(selectedService?.id ?? null)
+  const selectedBrief = useMemo(() => {
+    if (!selectedService || !selectedDecision) {
+      return null
+    }
+
+    return liveReleaseBrief ?? buildReleaseBrief(selectedService, selectedDecision, workspaceSnapshot)
+  }, [liveReleaseBrief, selectedDecision, selectedService, workspaceSnapshot])
+  const missingEvidence = selectedBrief?.missingEvidence ?? []
+  const evidencePack = selectedBrief?.evidencePack ?? selectedService?.evidence ?? []
 
   useEffect(() => {
     if (filteredServices.length === 0) {
@@ -351,14 +363,65 @@ export default function Catalog() {
 
               <div className="rounded-2xl border border-gray-200 p-4 dark:border-dark-700">
                 <p className="text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
-                  Decision summary
+                  Release brief
                 </p>
-                <p className="mt-2 text-base leading-7 text-gray-900 dark:text-white">
-                  {selectedDecision?.summary ?? selectedService.description}
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <StatusBadge
+                    status={
+                      selectedDecision?.verdict === 'go'
+                        ? 'healthy'
+                        : selectedDecision?.verdict === 'watch'
+                          ? 'degraded'
+                          : 'unhealthy'
+                    }
+                    label={selectedBrief?.decision ?? selectedDecision?.title ?? selectedService.releaseState}
+                    size="sm"
+                  />
+                  <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700 dark:bg-dark-700 dark:text-gray-300">
+                    {selectedBrief?.readinessScore ?? selectedService.healthScore}% readiness
+                  </span>
+                  <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700 dark:bg-dark-700 dark:text-gray-300">
+                    {selectedBrief?.evidenceCoverage ?? selectedService.evidence.length * 25}% evidence
+                  </span>
+                  <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700 dark:bg-dark-700 dark:text-gray-300">
+                    {liveReleaseBrief ? 'Live backend brief' : 'Local workspace brief'}
+                  </span>
+                </div>
+                <p className="mt-3 text-base leading-7 text-gray-900 dark:text-white">
+                  {selectedBrief?.summary ?? selectedDecision?.summary ?? selectedService.description}
                 </p>
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
                   <div className="space-y-2 rounded-2xl bg-gray-50 p-4 dark:bg-dark-700/40">
-                    <p className="text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">Why</p>
+                    <p className="text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
+                      Next best action
+                    </p>
+                    <p className="text-sm leading-6 text-gray-700 dark:text-gray-300">
+                      {selectedBrief?.nextBestAction ?? selectedDecision?.nextSteps[0] ?? 'Generate a release brief.'}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Owner: {selectedBrief?.nextBestOwner ?? selectedService.owner} · Effort:{' '}
+                      {selectedBrief?.nextBestEffort ?? 'small'} · Impact:{' '}
+                      {selectedBrief?.nextBestImpact ?? 'keeps audit traceability intact'}
+                    </p>
+                  </div>
+                  <div className="space-y-2 rounded-2xl bg-gray-50 p-4 dark:bg-dark-700/40">
+                    <p className="text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
+                      Missing evidence
+                    </p>
+                    <ul className="space-y-2 text-sm leading-6 text-gray-600 dark:text-gray-300">
+                      {missingEvidence.length > 0
+                        ? missingEvidence.map((entry) => <li key={entry}>• {entry}</li>)
+                        : (selectedDecision?.evidence ?? selectedService.evidence).slice(0, 3).map((entry) => (
+                            <li key={entry}>• {entry}</li>
+                          ))}
+                    </ul>
+                  </div>
+                </div>
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  <div className="space-y-2 rounded-2xl bg-gray-50 p-4 dark:bg-dark-700/40">
+                    <p className="text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
+                      Why this brief looks like this
+                    </p>
                     <ul className="space-y-2 text-sm leading-6 text-gray-600 dark:text-gray-300">
                       {(selectedDecision?.reasons ?? []).slice(0, 4).map((reason) => (
                         <li key={reason}>• {reason}</li>
@@ -370,11 +433,30 @@ export default function Catalog() {
                       Evidence to export
                     </p>
                     <ul className="space-y-2 text-sm leading-6 text-gray-600 dark:text-gray-300">
-                      {(selectedDecision?.evidence ?? selectedService.evidence).map((entry) => (
+                      {evidencePack.slice(0, 4).map((entry) => (
                         <li key={entry}>• {entry}</li>
                       ))}
                     </ul>
                   </div>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <Link
+                    to={`/ai?prompt=${encodeURIComponent(selectedBrief?.assistantPrompt ?? selectedDecision?.aiPrompt ?? buildAssistantPrompts(selectedService)[0])}&autostart=1`}
+                    className="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400"
+                  >
+                    Ask AI to explain this brief
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedBrief && typeof navigator !== 'undefined' && navigator.clipboard) {
+                        void navigator.clipboard.writeText(JSON.stringify(selectedBrief, null, 2))
+                      }
+                    }}
+                    className="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400"
+                  >
+                    Copy brief JSON
+                  </button>
                 </div>
               </div>
 

@@ -26,11 +26,48 @@ interface Message {
   source?: 'live' | 'local'
 }
 
+interface AssistantActionPlanItem {
+  label: string
+  status: string
+  detail: string
+}
+
+interface AssistantActionPlanStep {
+  name: string
+  status: string
+  detail: string
+  owner: string
+  why: string
+}
+
+interface AssistantActionPlan {
+  title: string
+  intent: string
+  mode: string
+  summary: string
+  confidence: string
+  execution_path: string
+  focus_service?: {
+    id: string
+    name: string
+    status: string
+    release_state: string
+    risk_level: string
+    health_score: number
+  } | null
+  steps: AssistantActionPlanStep[]
+  guardrails: AssistantActionPlanItem[]
+  evidence: AssistantActionPlanItem[]
+  observability: AssistantActionPlanItem[]
+  approvals: AssistantActionPlanItem[]
+  outcome_preview: AssistantActionPlanItem[]
+}
+
 const initialMessage: Message = {
   id: 'assistant-welcome',
   role: 'assistant',
   content:
-    'I can help with release decisions, ownership gaps, deployment requests, evidence packs, Argo CD rollouts, and Crossplane or Terraform infrastructure requests. Ask for a service-by-service assessment, a BSI C5 summary, or a safe next step.',
+    'I can help with release decisions, release briefs, ownership gaps, deployment requests, evidence packs, Argo CD rollouts, and Crossplane or Terraform infrastructure requests. Ask for a service-by-service assessment, a BSI C5 summary, or a safe next step.',
   timestamp: new Date(),
   source: 'local',
 }
@@ -57,6 +94,7 @@ export default function AIAssistant() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [deploymentHistory, setDeploymentHistory] = useState<DeploymentRequestRecord[]>(() => loadDeploymentHistory())
+  const [latestActionPlan, setLatestActionPlan] = useState<AssistantActionPlan | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const autoPromptRef = useRef<string | null>(null)
@@ -158,6 +196,7 @@ export default function AIAssistant() {
           answer?: string
           intent?: string
           deployment?: AssistantDeploymentSnapshot
+          action_plan?: AssistantActionPlan
         }
 
         const assistantText =
@@ -176,6 +215,7 @@ export default function AIAssistant() {
         }
 
         setMessages((previous) => [...previous, assistantMessage])
+        setLatestActionPlan(responseData.action_plan ?? null)
         if (deploymentRequest) {
           const deploymentResponse = assistantMessage.content
           setDeploymentHistory((previous) =>
@@ -202,6 +242,7 @@ export default function AIAssistant() {
             source: 'local',
           },
         ])
+        setLatestActionPlan(null)
         if (deploymentRequest) {
           setDeploymentHistory((previous) =>
             previous.map((entry) =>
@@ -250,6 +291,12 @@ export default function AIAssistant() {
     ) : (
       <StatusBadge status="pending" label="Planned" size="sm" />
     )
+
+  const renderPlanItemTone = (status?: string) => {
+    if (status === 'ready' || status === 'active') return 'border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/30'
+    if (status === 'attention') return 'border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/30'
+    return 'border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30'
+  }
 
   return (
     <div className="grid gap-6 p-6 md:p-8 xl:grid-cols-[1.15fr_0.85fr]">
@@ -334,6 +381,108 @@ export default function AIAssistant() {
       </section>
 
       <aside className="space-y-4">
+        {latestActionPlan ? (
+          <Card title={latestActionPlan.title} subtitle="AI-first interaction, deterministic execution">
+            <div className="space-y-4 text-sm text-gray-600 dark:text-gray-400">
+              <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 dark:border-dark-700 dark:bg-dark-700/40">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
+                      {latestActionPlan.mode} · {latestActionPlan.intent.split('_').join(' ')}
+                    </p>
+                    <p className="mt-2 text-sm leading-6">{latestActionPlan.summary}</p>
+                  </div>
+                  <StatusBadge status="running" label={`${latestActionPlan.confidence} confidence`} size="sm" />
+                </div>
+                <p className="mt-3 text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
+                  {latestActionPlan.execution_path}
+                </p>
+                {latestActionPlan.focus_service ? (
+                  <div className="mt-4 grid gap-2 text-xs sm:grid-cols-2">
+                    <span className="rounded-full bg-white px-3 py-1 text-gray-700 dark:bg-dark-800 dark:text-gray-300">
+                      Focus: {latestActionPlan.focus_service.name}
+                    </span>
+                    <span className="rounded-full bg-white px-3 py-1 text-gray-700 dark:bg-dark-800 dark:text-gray-300">
+                      Risk: {latestActionPlan.focus_service.risk_level}
+                    </span>
+                    <span className="rounded-full bg-white px-3 py-1 text-gray-700 dark:bg-dark-800 dark:text-gray-300">
+                      State: {latestActionPlan.focus_service.release_state}
+                    </span>
+                    <span className="rounded-full bg-white px-3 py-1 text-gray-700 dark:bg-dark-800 dark:text-gray-300">
+                      Health: {latestActionPlan.focus_service.health_score}
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+
+              <div>
+                <h3 className="text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">Execution steps</h3>
+                <div className="mt-3 space-y-3">
+                  {latestActionPlan.steps.map((step) => (
+                    <div key={`${step.name}-${step.owner}`} className={`rounded-2xl border p-4 ${renderPlanItemTone(step.status)}`}>
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="font-medium text-gray-900 dark:text-white">{step.name}</p>
+                          <p className="mt-1 text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
+                            Owner: {step.owner}
+                          </p>
+                        </div>
+                        <StatusBadge status={step.status === 'attention' ? 'unhealthy' : step.status === 'ready' ? 'healthy' : 'degraded'} label={step.status} size="sm" />
+                      </div>
+                      <p className="mt-3 leading-6">{step.detail}</p>
+                      <p className="mt-2 text-xs leading-5 text-gray-500 dark:text-gray-400">{step.why}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid gap-4 xl:grid-cols-2">
+                <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-800">
+                  <h3 className="text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">Guardrails</h3>
+                  <div className="mt-3 space-y-3">
+                    {latestActionPlan.guardrails.map((item) => (
+                      <div key={item.label} className={`rounded-2xl border p-3 ${renderPlanItemTone(item.status)}`}>
+                        <p className="font-medium text-gray-900 dark:text-white">{item.label}</p>
+                        <p className="mt-2 leading-6">{item.detail}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-800">
+                  <h3 className="text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">Evidence and approvals</h3>
+                  <div className="mt-3 space-y-3">
+                    {[...latestActionPlan.evidence, ...latestActionPlan.approvals].map((item) => (
+                      <div key={`${item.label}-${item.detail}`} className={`rounded-2xl border p-3 ${renderPlanItemTone(item.status)}`}>
+                        <p className="font-medium text-gray-900 dark:text-white">{item.label}</p>
+                        <p className="mt-2 leading-6">{item.detail}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-800">
+                <h3 className="text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">Observability and manual fallback</h3>
+                <div className="mt-3 space-y-3">
+                  {latestActionPlan.observability.map((item) => (
+                    <div key={item.label} className={`rounded-2xl border p-3 ${renderPlanItemTone(item.status)}`}>
+                      <p className="font-medium text-gray-900 dark:text-white">{item.label}</p>
+                      <p className="mt-2 leading-6">{item.detail}</p>
+                    </div>
+                  ))}
+                  <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3 dark:border-dark-700 dark:bg-dark-700/40">
+                    <p className="font-medium text-gray-900 dark:text-white">Manual controls stay available</p>
+                    <p className="mt-2 leading-6">
+                      Developers can start with AI, then verify or continue manually in the catalog, dashboard, and settings screens without losing the execution trail.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
+        ) : null}
+
         <Card title="Assistant context" subtitle="What the assistant can reason over">
           <div className="space-y-3 text-sm text-gray-600 dark:text-gray-400">
             <div className="flex items-center justify-between">

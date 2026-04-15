@@ -21,6 +21,7 @@ type RateLimiter struct {
 	lastCleanup      time.Time
 	requestsSeen     int
 	cleanupThreshold int
+	metrics          *Metrics
 }
 
 type RateLimiterStats struct {
@@ -51,6 +52,17 @@ func NewRateLimiter(requests int, window time.Duration) *RateLimiter {
 		staleAfter:       window * 2,
 		cleanupThreshold: requests,
 	}
+}
+
+// SetMetrics wires rate limiter events into the shared telemetry collector.
+func (r *RateLimiter) SetMetrics(metrics *Metrics) {
+	if r == nil {
+		return
+	}
+
+	r.mu.Lock()
+	r.metrics = metrics
+	r.mu.Unlock()
 }
 
 // Allow checks whether the provided key can make a request.
@@ -121,7 +133,13 @@ func rateLimitKey(r *http.Request) string {
 // Middleware returns a rate limiting middleware.
 func (r *RateLimiter) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		if req.Method == http.MethodOptions || req.URL.Path == "/health" {
+		switch req.URL.Path {
+		case "/health", "/live", "/ready", "/metrics":
+			next.ServeHTTP(w, req)
+			return
+		}
+
+		if req.Method == http.MethodOptions {
 			next.ServeHTTP(w, req)
 			return
 		}
@@ -132,6 +150,12 @@ func (r *RateLimiter) Middleware(next http.Handler) http.Handler {
 		}
 
 		if !r.Allow(rateLimitKey(req)) {
+			r.mu.Lock()
+			metrics := r.metrics
+			r.mu.Unlock()
+			if metrics != nil {
+				metrics.RecordRateLimit()
+			}
 			w.Header().Set("Retry-After", "60")
 			http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
 			return

@@ -147,6 +147,7 @@ export const demoInsights: DemoInsight[] = [
 
 export const aiPromptSuggestions = [
   'Deploy Payment API via GitHub and Argo CD',
+  'Generate a release brief for Audit Ledger',
   'Plan Crossplane infrastructure for Audit Ledger',
   'Draft Terraform infrastructure for the next service',
   'Generate a BSI C5 evidence pack for Audit Ledger',
@@ -172,6 +173,15 @@ export function buildAssistantFallbackResponse(
   const blockedServices = services.filter((service) => service.releaseState === 'blocked').length
   const criticalServices = services.filter((service) => service.tier === 'critical').length
   const ownerlessServices = services.filter((service) => service.owner === 'Unassigned').length
+
+  if (normalized.includes('brief') || normalized.includes('decision pack') || normalized.includes('operator brief')) {
+    return [
+      `I prepared a release brief for ${selectedService.name}.`,
+      `The decision is ${selectedService.releaseState} with ${selectedService.healthScore}% health and ${selectedService.evidence.length} evidence items attached.`,
+      `Next best action: ${selectedService.evidence[0] ?? 'capture the current evidence pack'} before the next release window.`,
+      `If you want the brief in the UI, open the catalog drilldown and export the brief JSON from the selected service.`,
+    ].join('\n\n')
+  }
 
   if (normalized.includes('compliance') || normalized.includes('c5') || normalized.includes('audit')) {
     return [

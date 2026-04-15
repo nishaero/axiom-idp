@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom'
 export default function Sidebar() {
   const navItems = [
     { label: 'Dashboard', path: '/' },
+    { label: 'Observability', path: '/observability' },
     { label: 'Catalog', path: '/catalog' },
     { label: 'AI Assistant', path: '/ai' },
     { label: 'Security & Compliance', path: '/settings' },

@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 )
@@ -44,6 +45,22 @@ type platformStatus struct {
 	Audit              AuditStats             `json:"audit"`
 	RateLimiting       RateLimiterStats       `json:"rate_limiting"`
 	ObservabilityNotes []string               `json:"observability_notes"`
+}
+
+type observabilityEndpoint struct {
+	Name        string `json:"name"`
+	Path        string `json:"path"`
+	Status      string `json:"status"`
+	Description string `json:"description"`
+}
+
+type observabilityResponse struct {
+	Platform              platformStatus          `json:"platform"`
+	Telemetry             telemetrySnapshot       `json:"telemetry"`
+	Endpoints             []observabilityEndpoint `json:"endpoints"`
+	MetricsEndpoint       string                  `json:"metrics_endpoint"`
+	PrometheusAnnotations []string                `json:"prometheus_annotations"`
+	Notes                 []string                `json:"notes"`
 }
 
 func (s *Server) buildPlatformStatus() platformStatus {
@@ -146,6 +163,85 @@ func (s *Server) buildPlatformStatus() platformStatus {
 			"Dashboard values marked live come from the backend platform status endpoint.",
 			"Prometheus and OpenTelemetry exporters are the next recommended step for production telemetry depth.",
 			"Release blockers are derived from ownership, evidence, and service health signals.",
+		},
+	}
+}
+
+func (s *Server) handleObservability(w http.ResponseWriter, r *http.Request) {
+	platform := s.buildPlatformStatus()
+	if s.metrics != nil {
+		s.metrics.UpdatePlatformSnapshot(platform)
+		s.metrics.UpdateOperationalSnapshots(platform.Audit, platform.RateLimiting)
+	}
+
+	response := observabilityResponse{
+		Platform:        platform,
+		Telemetry:       telemetrySnapshot{},
+		Endpoints:       buildObservabilityEndpoints(platform.Status),
+		MetricsEndpoint: "/metrics",
+		PrometheusAnnotations: []string{
+			"prometheus.io/scrape=true",
+			"prometheus.io/path=/metrics",
+			"prometheus.io/port=80",
+		},
+		Notes: []string{
+			"Prometheus scrapes the /metrics endpoint directly; the UI shows a compact status snapshot from the control plane.",
+			"Readiness and liveness are exposed separately so minikube and production deployments can distinguish startup from health.",
+			"Telemetry counters are stored in-process for local and demo deployments; use shared storage if you need multi-replica durability.",
+		},
+	}
+	if s.metrics != nil {
+		response.Telemetry = s.metrics.Snapshot()
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+func buildObservabilityEndpoints(platformState string) []observabilityEndpoint {
+	endpointStatus := func(status string) string {
+		switch status {
+		case statusReady:
+			return "healthy"
+		case statusDegraded:
+			return "degraded"
+		case statusUnready:
+			return "unhealthy"
+		default:
+			return "unknown"
+		}
+	}
+
+	platformTone := endpointStatus(platformState)
+	return []observabilityEndpoint{
+		{
+			Name:        "Live probe",
+			Path:        "/live",
+			Status:      "healthy",
+			Description: "Container liveness probe for Kubernetes and Docker entrypoints.",
+		},
+		{
+			Name:        "Readiness probe",
+			Path:        "/ready",
+			Status:      platformTone,
+			Description: "Checks session secret and AI backend configuration before serving traffic.",
+		},
+		{
+			Name:        "Health snapshot",
+			Path:        "/health",
+			Status:      platformTone,
+			Description: "Returns the platform status summary used by the dashboard and smoke tests.",
+		},
+		{
+			Name:        "Prometheus metrics",
+			Path:        "/metrics",
+			Status:      "healthy",
+			Description: "Prometheus exposition for HTTP, AI, deployment, audit, and rate-limit telemetry.",
+		},
+		{
+			Name:        "Platform status API",
+			Path:        "/api/v1/platform/status",
+			Status:      platformTone,
+			Description: "Structured control-plane snapshot consumed by the dashboard and operator workflows.",
 		},
 	}
 }
