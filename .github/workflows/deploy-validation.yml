@@ -40,4 +40,6 @@ jobs:
           driver: docker
 
       - name: Validate Minikube deployment
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: ./scripts/validate-minikube.sh

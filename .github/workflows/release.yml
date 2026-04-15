@@ -213,7 +213,10 @@ jobs:
           push-to-registry: true
 
       - name: Verify image signature
-        run: cosign verify ${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+        run: |
+          cosign verify ${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }} \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --certificate-identity-regexp "^https://github.com/${{ github.repository }}/.github/workflows/release.yml@refs/tags/${{ github.ref_name }}$"
 
       - name: Verify image attestation
         run: gh attestation verify oci://${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }} --repo ${{ github.repository }}
