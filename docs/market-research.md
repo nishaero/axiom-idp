@@ -1,109 +1,150 @@
 # Axiom IDP Market Research and Differentiation
 
+Updated: 2026-04-15
+
 ## Purpose
 
-This document records the market signals used to shape Axiom IDP. It is a gap analysis, not a template for copying competitor implementations. Axiom must stay original in architecture, workflows, language, and user experience.
+This document records the competitor assessment used to position Axiom IDP. It is a gap analysis, not a template for copying competitor product behavior, UX structure, terminology, or implementation.
 
-## Market Signals
+## Sources Reviewed
 
-As of April 14, 2026, the main Internal Developer Platform and developer portal vendors already emphasize:
+Official sources reviewed for this assessment:
 
-- Software catalogs and service inventory
-- Scorecards and standards tracking
-- Self-service workflows
-- CI/CD and cloud integration
-- AI-assisted discovery or operational context
+- Backstage software catalog: https://backstage.io/docs/features/software-catalog/
+- Backstage software templates: https://backstage.io/docs/features/software-templates/
+- Backstage Kubernetes: https://backstage.io/docs/next/features/kubernetes/
+- Port homepage: https://www.port.io/
+- Port scorecards: https://docs.port.io/scorecards/overview/
+- Port self-service actions: https://docs.port.io/create-self-service-experiences/
+- Port automations: https://docs.port.io/actions-and-automations/define-automations/
+- Port catalog auto-discovery: https://docs.port.io/build-your-software-catalog/catalog-auto-discovery/
+- Cortex getting started: https://docs.cortex.io/docs/walkthroughs/getting-started/dev-homepage
+- Cortex scorecards: https://docs.cortex.io/scorecards
+- Cortex GitOps: https://docs.cortex.io/configure/gitops
+- Humanitec overview: https://developer.humanitec.com/app-humanitec-io/docs/introduction/overview/
+- Humanitec platform orchestrator: https://humanitec.com/products/platform-orchestrator
+- Humanitec developer self-service: https://humanitec.com/developer-self-service
+- OpsLevel docs: https://docs.opslevel.com/docs
+- OpsLevel scorecards: https://docs.opslevel.com/docs/scorecards
+- OpsLevel catalog: https://www.opslevel.com/product/catalog
+- MCP architecture: https://modelcontextprotocol.io/docs/learn/architecture
+- MCP registry: https://registry.modelcontextprotocol.io/
 
-Representative sources:
+## Market Baseline
 
-- Backstage overview and software catalog positioning:
-  - https://backstage.io/
-- Port scorecards and standards tracking:
-  - https://docs.port.io/guides/all/measure-standards
-- Cortex scorecards:
-  - https://docs.cortex.io/scorecards/create
-- Humanitec platform orchestrator:
-  - https://humanitec.com/products/platform-orchestrator
+As of 2026, the market baseline for internal developer platforms and engineering portals already includes:
 
-## What This Means
+- service catalog and ownership inventory
+- standards, scorecards, and compliance-like checks
+- self-service actions and workflow automation
+- CI/CD and Kubernetes integration
+- some level of AI-assisted discovery or summary generation
 
-“Catalog + scorecards + workflows + AI assistant” is no longer a differentiator by itself. Those capabilities are now baseline expectations in the market.
+That means "catalog + scorecards + workflows + AI chat" is no longer a differentiator by itself.
 
-The opportunity for Axiom is to move from passive portal behavior to active release governance with evidence, reasoning, and risk controls that are useful for regulated environments.
+## Where Axiom Is Ahead
 
-## Axiom-Specific Differentiators
+Axiom is currently strongest in areas that combine decision-making, delivery, and compliance posture:
 
-These are the product areas where Axiom should be original and stronger than current mainstream offerings:
+- AI-guided release readiness rather than AI as a generic assistant layer
+- GitHub-native SDLC continuity from pull request to image to deploy flow
+- BSI C5-aligned evidence and operational control posture as a first-class product concern
+- local and self-hosted AI support that is useful for regulated organizations
+- deterministic backend analysis with AI layered on top, instead of AI deciding core platform truth
 
-### 1. Evidence-Native BSI C5 Control Mapping
+## Where Axiom Is Behind
 
-Axiom should generate deployment and change evidence as a first-class product capability, not as an afterthought.
+Compared with the current market leaders, Axiom is still behind in platform breadth and maturity:
 
-Original direction:
+- Backstage is ahead on ecosystem and plugin maturity
+- Port is ahead on product completeness for scorecards, self-service, and automation breadth
+- Cortex is ahead on operational maturity for engineering homepages and standards workflows
+- Humanitec is ahead on deep infrastructure orchestration and abstraction
+- OpsLevel is ahead on turnkey catalog enrichment, scorecards, and polished portal breadth
 
-- Per-service evidence packs linked to controls, approvals, runtime health, and delivery events
-- Exportable audit narratives for BSI C5 reviews
-- Control status derived from live operational signals instead of manual spreadsheet collection
+## What Axiom Should Not Compete On
 
-Why it matters:
+These areas are too crowded or easy to commoditize:
 
-- Competitors widely support scorecards and compliance-like metadata, but the market messaging reviewed does not center on BSI C5 evidence automation as a core workflow. This is an inference from the cited sources, not a direct claim by those vendors.
+- generic service catalog experiences
+- generic scorecard dashboards
+- generic internal portal UX
+- generic AI chat over platform data
 
-### 2. AI-Guided Change Risk With Explainability
+Trying to win there would push Axiom toward a copy of incumbent offerings rather than a distinct product.
 
-Axiom should evaluate a proposed deployment or service change and explain the operational risk in concrete terms.
+## Defensible Differentiation For Axiom
 
-Original direction:
+The most defensible product direction for Axiom is:
 
-- Pre-release risk scoring
-- Blast-radius hints based on ownership, service health, recent changes, and dependency signals
-- Plain-language explanations of why a release is ready, risky, or blocked
+### 1. Evidence-Native Release Control
 
-Why it matters:
+Axiom should make every release decision explainable in terms of:
 
-- Current vendors market AI context and orchestration, but there is still room for a system that explains release risk in a compliance- and operations-friendly way rather than acting as a generic chat layer.
+- ownership
+- service health
+- change signals
+- missing controls
+- deployment state
+- evidence completeness
 
-### 3. GitHub-Native SDLC Control Plane
+This is stronger than passive metadata presentation and more aligned with regulated delivery environments.
 
-Axiom should treat GitHub as the primary system of delivery truth while staying deployable in self-hosted and Kubernetes environments.
+### 2. Compliance As An Operational Workflow
 
-Original direction:
+Axiom should treat compliance as something teams operate through, not just report on later:
 
-- GHCR-first artifact publishing
-- Release validation tied to pull requests, container builds, and deployment smoke tests
-- Runtime evidence correlated with GitHub changesets and approvals
+- evidence packs
+- audit narratives
+- release blockers tied to missing controls
+- remediation guidance tied to actual service state
 
-Why it matters:
+### 3. AI-Guided Next Best Action
 
-- Most competitors integrate with GitHub. Axiom can differentiate by making the GitHub SDLC itself part of the operational evidence chain rather than only another integration source.
+The AI value in Axiom should stay focused on questions that reduce operator latency:
 
-### 4. Operator-Facing “Decision” UX, Not Just Dashboard UX
+- Can I ship this safely?
+- What is blocking this release?
+- What changed since the last healthy deployment?
+- Which control or owner gap matters most?
+- What is the safest next step?
 
-Axiom should optimize for the moment a platform engineer decides whether to approve, delay, or investigate a release.
+### 4. GitHub-Native Delivery And Evidence Chain
 
-Original direction:
+Axiom should continue to use GitHub as the primary lifecycle spine:
 
-- Decision-oriented summaries
-- Required-owner and readiness checks surfaced before deployment
-- Focus on “what should I do next” rather than generic observability tiles
+- PR
+- workflow run
+- image publication
+- deployment request
+- evidence and audit trace
 
-Why it matters:
+That creates a coherent SDLC story instead of a collection of disconnected integrations.
 
-- Many portals are strong at inventory and metadata presentation. Fewer are shaped around a release decision loop with evidence and risk reasoning as the primary interaction.
+## MCP Assessment
 
-## Design Guardrails
+MCP is still relevant for Axiom, but only as an integration plane.
 
-To keep Axiom unique:
+Keep MCP for:
 
-- Do not copy competitor page structure, terminology, or visual hierarchy.
-- Do not mirror competitor workflow names.
-- Keep Axiom language focused on evidence, readiness, and operational decisions.
-- Prefer original data models that connect service health, delivery state, ownership, and compliance evidence.
+- exposing tools and resources to AI
+- future interoperability with external agent systems
+- pluggable integrations for GitHub, Kubernetes, and observability systems
 
-## Product Recommendation
+Do not center the product on MCP.
+
+The core product runtime should remain:
+
+- explicit HTTP APIs
+- deterministic services
+- background jobs
+- GitOps workflows
+- policy and evidence logic native to Axiom
+
+## Recommendation
 
 The strongest near-term positioning for Axiom is:
 
-“An AI-native internal developer platform for release readiness and compliance evidence, built around GitHub delivery flows and BSI C5-aligned operational controls.”
+**An AI-native internal developer platform for release readiness, GitOps delivery, and compliance evidence, built around GitHub workflows and BSI C5-aligned operational controls.**
 
-That positioning is narrower than a generic portal, but it is more defensible and more original.
+That positioning is narrower than a generic developer portal, but it is more original, more defensible, and more useful for organizations that care about controlled change rather than only portal convenience.

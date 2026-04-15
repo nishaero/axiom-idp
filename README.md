@@ -1,17 +1,17 @@
 # Axiom IDP - AI-Native Internal Developer Platform
 
-[![Build Status](https://github.com/axiom-idp/axiom/actions/workflows/ci.yml/badge.svg)](https://github.com/axiom-idp/axiom/actions)
-[![Security Scanning](https://github.com/axiom-idp/axiom/actions/workflows/security-scan.yml/badge.svg)](https://github.com/axiom-idp/axiom/actions)
+[![Build Status](https://github.com/nishaero/axiom-idp/actions/workflows/ci.yml/badge.svg)](https://github.com/nishaero/axiom-idp/actions)
+[![Security Scanning](https://github.com/nishaero/axiom-idp/actions/workflows/security-scan.yml/badge.svg)](https://github.com/nishaero/axiom-idp/actions)
 [![License](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-orange)](LICENSE)
-[![Go Report Card](https://goreportcard.com/badge/github.com/axiom-idp/axiom)](https://goreportcard.com/report/github.com/axiom-idp/axiom)
-[![Code Coverage](https://codecov.io/github/axiom-idp/axiom/graph/badge.svg)](https://codecov.io/github/axiom-idp/axiom)
+[![Go Report Card](https://goreportcard.com/badge/github.com/nishaero/axiom-idp)](https://goreportcard.com/report/github.com/nishaero/axiom-idp)
+[![Code Coverage](https://codecov.io/github/nishaero/axiom-idp/graph/badge.svg)](https://codecov.io/github/nishaero/axiom-idp)
 
 <div align="center">
   <img src="docs/assets/axiom-logo.svg" alt="Axiom IDP Logo" width="200" style="border-radius: 12px;" />
   <br>
   <strong>Stateless, MCP-Native Internal Developer Platform with AI-First Design</strong>
   <br>
-  <a href="https://github.com/axiom-idp/axiom/releases/latest">Download Latest Release</a>
+  <a href="https://github.com/nishaero/axiom-idp/releases/latest">Download Latest Release</a>
   <br><br>
   <a href="SECURITY.md"><img src="https://img.shields.io/badge/BSI%20C5-aligned%20baseline-green" alt="BSI C5 aligned baseline"></a>
   <a href="https://polyformproject.org/licenses/noncommercial/1.0.0/"><img src="https://img.shields.io/badge/License-PolyForm%20Noncommercial%201.0.0-orange" alt="License"></a>
@@ -21,7 +21,7 @@
 
 ## 🎯 Overview
 
-Axiom is a stateless, MCP-native Internal Developer Platform designed to provide AI-first developer experiences with minimal resource overhead. Built with security and performance at its core, Axiom leverages the Model Context Protocol (MCP) for pluggable integrations while maintaining enterprise-grade security standards.
+Axiom is an AI-native internal developer platform focused on release readiness, GitOps delivery, and compliance-aware operations. It combines deterministic backend analysis with local or Ollama-backed AI guidance, GitHub-native SDLC automation, and deployment flows that can act directly on Kubernetes or through GitOps with Argo CD.
 
 ### AI Runtime Modes
 
@@ -31,16 +31,15 @@ Axiom is a stateless, MCP-native Internal Developer Platform designed to provide
 
 ### ✨ Key Features
 
-- **AI-Native Architecture**: First-class AI integration using Model Context Protocol (MCP)
-- **Stateless Design**: Metadata-only runtime state with deterministic local AI fallback
-- **MCP-Powered Integrations**: Use MCP servers for pluggable integrations (GitHub, Kubernetes, etc.)
+- **AI-Native Architecture**: Deterministic platform analysis with local or Ollama-backed AI guidance
+- **GitOps Delivery**: AI can trigger direct Kubernetes deploys or GitHub-backed Argo CD delivery flows
+- **Infrastructure Workflows**: Terraform-backed infrastructure requests are supported through GitOps execution
+- **Optional MCP Integration Plane**: MCP remains available for pluggable AI-facing integrations without owning the core runtime
 - **RBAC & OAuth2/OIDC**: Enterprise-grade security with fine-grained access control
-- **Low Resource Usage**: <256MB RAM footprint, optimized for edge deployment
-- **Sub-2s AI Response Time**: Optimized context windows for rapid insights
 - **Professional UI**: Modern React + TypeScript + Tailwind CSS frontend
-- **Production-Ready**: Docker, Kubernetes, systemd deployments included
-- **Security First**: BSI C5-aligned baseline, comprehensive vulnerability scanning
-- **Comprehensive Logging**: Audit trails, health monitoring, metrics export
+- **Production-Ready Delivery Paths**: Docker, Kubernetes, GitHub Actions, GHCR, and semver-tagged release automation
+- **Security First**: BSI C5-aligned baseline, signed images, SBOM generation, provenance attestation, vulnerability scanning
+- **Operational Visibility**: Audit trails, readiness/liveness endpoints, and backend-fed platform status in the UI
 
 ---
 
@@ -48,8 +47,8 @@ Axiom is a stateless, MCP-native Internal Developer Platform designed to provide
 
 ### Prerequisites
 
-- Go 1.22+
-- Node.js 20+ and npm
+- Go 1.24+
+- Node.js 24+ and npm
 - Docker and Docker Compose v2
 - Optional: Ollama reachable from the deployment target if you want the AI-backed mode
 
@@ -59,7 +58,7 @@ Axiom is a stateless, MCP-native Internal Developer Platform designed to provide
 
 ```bash
 # Download latest release
-curl -L https://github.com/axiom-idp/axiom/releases/latest/download/axiom-linux-amd64 -o axiom
+curl -L https://github.com/nishaero/axiom-idp/releases/latest/download/axiom-linux-amd64 -o axiom
 chmod +x axiom
 sudo mv axiom /usr/local/bin/
 ```
@@ -67,8 +66,8 @@ sudo mv axiom /usr/local/bin/
 #### Option 2: Build from Source
 
 ```bash
-git clone https://github.com/axiom-idp/axiom.git
-cd axiom
+git clone https://github.com/nishaero/axiom-idp.git
+cd axiom-idp
 make build
 ./bin/axiom-server
 ```
@@ -110,6 +109,13 @@ AXIOM_AI_BACKEND=ollama AXIOM_AI_BASE_URL=http://host.docker.internal:11434 dock
 ```
 
 Visit `http://localhost:8080` in your browser.
+
+### Runtime Status Endpoints
+
+- `/live` returns process liveness
+- `/ready` returns runtime readiness
+- `/health` returns platform health summary
+- `/api/v1/platform/status` returns backend-fed operational status used by the dashboard
 
 ---
 
@@ -184,10 +190,27 @@ axiom-idp/
 - [Getting Started Guide](docs/getting-started.md)
 - [Architecture Overview](docs/architecture.md)
 - [API Reference](docs/api.md)
+- [Platform Readiness Assessment](docs/platform-readiness-assessment.md)
+- [Market Research and Differentiation](docs/market-research.md)
 - [Security Best Practices](SECURITY.md)
 - [Contributing Guide](CONTRIBUTING.md)
 - [Deployment Guide](DEPLOYMENT.md)
 - [Building & Installation](QUICKSTART_DOCKER.md)
+
+---
+
+## 🚀 Release And Supply Chain
+
+Axiom uses GitHub-native release automation:
+
+- Pull requests must pass `CI`, `Code Quality Gate`, `Security Scan`, and `Dependency Review`
+- release workflow triggers only on semantic version tags like `v1.2.3`
+- images are published to `ghcr.io`
+- release and validation images are signed with keyless Sigstore cosign
+- SPDX SBOMs are generated during publish flows
+- build provenance is attested through GitHub artifact attestations
+
+This keeps the SDLC, artifact publication, and verification chain in GitHub instead of splitting release trust across multiple systems.
 
 ---
 

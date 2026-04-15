@@ -1,61 +1,70 @@
 # Platform Readiness Assessment
 
-This assessment captures the current GitHub automation posture and the product direction check requested for the IDP.
+Updated: 2026-04-14
 
-## Alignment With The Plan
+## Current Launch State
 
-The repo is aligned with the core direction for a competitive IDP:
+Axiom IDP is in launch-candidate state on the current branch.
 
-- GitHub-native governance and branch protection are in place.
-- AI is being used for release readiness, deployment status, and infra/deploy request routing.
-- GitOps-style delivery is now validated through Argo CD and direct Kubernetes paths.
-- CI is moving toward a deterministic gate model instead of ad hoc validation.
+Validated on the current revision:
 
-## Workflow Hardening
+- `go test ./...`
+- `go vet ./...`
+- `cd web && npm run lint`
+- `cd web && npm test -- --run`
+- `cd web && npm run build`
+- `./scripts/validate-docker.sh`
+- `./scripts/validate-minikube.sh`
+- GitHub Actions:
+  - `CI`
+  - `Code Quality Gate`
+  - `Security Scan`
+  - `Dependency Review`
 
-The current GitHub automation now includes:
+## What Is Production-Ready
 
-- A code quality gate that runs workflow linting, `go vet`, `golangci-lint`, and frontend type/lint checks.
-- Optional SonarQube/SonarCloud support when repo secrets and variables are configured.
-- Dependency review on pull requests, with a repo-local manifest hygiene fallback because GitHub dependency graph support is not enabled here.
-- Image publish validation with GHCR push, pull, and container smoke testing.
-- Branch-protection automation that can require the new quality and dependency checks.
+- Signed session tokens, RBAC, security headers, rate limiting, and audit middleware
+- Local and Ollama-backed AI runtime with deterministic fallback behavior
+- GitHub-native SDLC automation with required quality and security gates
+- GHCR image publication, semver-tagged release flow, image signing, SBOM generation, and provenance attestation
+- Docker and Kubernetes deployment paths with explicit `/live`, `/ready`, and `/health` endpoints
+- Backend-fed platform status surfaced in the UI through `/api/v1/platform/status`
+- AI-triggered deploy/status flows for:
+  - direct Kubernetes deployment
+  - GitHub-backed Argo CD deployment
+  - Terraform-backed infrastructure requests through GitOps execution
 
-## Scalability And HA
+## Competitive Alignment
 
-The implementation is compatible with horizontal scaling because the active server path is mostly stateless, but the repository does not yet prove full HA in production conditions.
+Axiom is aligned with its intended market position when treated as:
 
-What is present:
+- an AI-assisted release decision platform
+- a GitHub-native delivery control plane
+- a compliance-aware internal platform with BSI C5-aligned operational guardrails
 
-- Health endpoint and deployment validation.
-- Docker and Minikube validation paths.
-- GitHub delivery automation with image publication.
+It is not trying to win as a generic developer portal clone. The strongest differentiators remain:
 
-What still needs production hardening:
+- release-readiness decisions instead of passive catalog browsing
+- evidence-native operational workflows
+- GitHub-to-GitOps delivery continuity
+- self-hosted AI support for regulated environments
 
-- Multi-replica service validation behind a load balancer.
-- Persistent backing services and failover strategy.
-- Readiness/liveness probes beyond basic health.
-- HA validation for the deployment controller path.
+## Remaining Boundaries
 
-## Observability
+This branch is validated and deployable, but a few items are still beyond the current launch baseline:
 
-The repo has the beginnings of runtime status tracking, but it is not yet a full observability platform.
+- formal BSI C5 certification still requires organizational controls, audit evidence, and external review
+- Crossplane execution is not yet proven end to end in the same way Terraform-backed infrastructure is
+- true HA at production scale still needs externalized state for database, audit/event storage, and rate limiting
+- observability is improved, but a full Prometheus/OpenTelemetry/Grafana stack is still a recommended next step
+- browser-driven E2E coverage for every UI path is not yet part of the automated suite
 
-Useful next additions are:
+## Recommendation
 
-- Metrics export for service and deployment state.
-- Distributed tracing for deployment and AI request flows.
-- Log correlation IDs surfaced in the UI.
-- A UI status surface that shows health, rollout progress, and delivery history in one place.
+The repository is ready to move from implementation to controlled launch activity:
 
-## Competitive Position
-
-This is still in line with the plan to be better than common IDP offerings because the differentiator is not copying a portal surface. It is:
-
-- AI-assisted operational decisions.
-- GitHub-native governance.
-- Deterministic deployment and status workflows.
-- Compliance-aware workflow automation.
-
-The main gap versus mature competitors remains operational depth: observability, true HA proof, and fully automated infrastructure reconciliation still need work.
+1. merge the validated branch
+2. cut a semantic version tag
+3. verify the published GHCR image signature, SBOM, and provenance
+4. deploy to the target environment with a real session secret and production backing services
+5. complete the final organization-specific readiness checklist for secrets, HA, observability, and compliance evidence
