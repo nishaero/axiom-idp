@@ -48,19 +48,19 @@ jobs:
               "Deploy Validation",
             ];
 
-            const runs = await github.paginate(
-              github.rest.actions.listWorkflowRunsForRepo,
-              {
-                owner,
-                repo,
-                head_sha: sha,
-                per_page: 100,
-              },
-              (response) => response.data.workflow_runs,
-            );
+            const response = await github.rest.actions.listWorkflowRunsForRepo({
+              owner,
+              repo,
+              head_sha: sha,
+              per_page: 100,
+            });
+            const runs = response.data.workflow_runs || [];
 
             const latestByName = new Map();
             for (const run of runs) {
+              if (!run || !run.name) {
+                continue;
+              }
               if (run.event !== "push") {
                 continue;
               }
