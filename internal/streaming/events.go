@@ -86,7 +86,7 @@ const (
 
 // EventProducer produces events
 type EventProducer struct {
-	logger   *logrus.Logger
+	logger   *logrus.Entry
 	brokers  []EventBroker
 	mu       sync.RWMutex
 }
@@ -105,7 +105,8 @@ type EventHandler func(ctx context.Context, event *Event)
 
 // InMemoryBroker is an in-memory event broker
 type InMemoryBroker struct {
-	logger    *logrus.Logger
+	mu    sync.RWMutex
+	logger    *logrus.Entry
 	handlers  map[EventType][]EventHandler
 	eventChan chan *Event
 	cleanupChan chan chan struct{}
@@ -171,7 +172,7 @@ func (b *InMemoryBroker) Unsubscribe(eventType EventType, handler EventHandler) 
 
 	handlers := b.handlers[eventType]
 	for i, h := range handlers {
-		if h == handler {
+		if fmt.Sprintf("%p", h) == fmt.Sprintf("%p", handler) {
 			b.handlers[eventType] = append(handlers[:i], handlers[i+1:]...)
 			b.logger.WithFields(logrus.Fields{
 				"type":    eventType,
@@ -374,7 +375,7 @@ func (p *EventProducer) GetBrokerCount() int {
 
 // EventFactory provides factory methods for creating events
 type EventFactory struct {
-	logger *logrus.Logger
+	logger *logrus.Entry
 }
 
 // NewEventFactory creates a new event factory

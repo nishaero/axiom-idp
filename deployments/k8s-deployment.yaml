@@ -2,116 +2,213 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: axiom
-
+  labels:
+    app.kubernetes.io/name: axiom-idp
+    app.kubernetes.io/part-of: axiom-idp
 ---
-
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: axiom-config
   namespace: axiom
 data:
-  AXIOM_PORT: "8080"
+  AXIOM_HOST: "0.0.0.0"
+  AXIOM_PORT: "8081"
   AXIOM_ENV: "production"
   AXIOM_LOG_LEVEL: "info"
-  AXIOM_DB_DRIVER: "postgres"
-
+  # SQLite is the local fallback for smoke tests and single-node runs.
+  # Set AXIOM_DB_DRIVER=postgres and AXIOM_DB_URL to a shared PostgreSQL instance for multi-replica HA.
+  AXIOM_DB_DRIVER: "sqlite3"
+  AXIOM_DB_URL: "file:/var/lib/axiom/axiom.db"
+  AXIOM_RATE_LIMIT_REQUESTS: "1000"
+  AXIOM_RATE_LIMIT_WINDOW: "1m"
+  AXIOM_AI_BACKEND: "local"
+  AXIOM_AI_TIMEOUT: "90s"
+  AXIOM_AI_MAX_TOKENS: "768"
 ---
-
 apiVersion: v1
-kind: Secret
+kind: PersistentVolumeClaim
 metadata:
-  name: axiom-secrets
+  name: axiom-data
   namespace: axiom
-type: Opaque
-stringData:
-  AXIOM_DB_URL: "postgres://axiom:password@postgres:5432/axiom"
-  AXIOM_SESSION_SECRET: "change-me-in-production"
-  AXIOM_OAUTH_CLIENT_SECRET: "oauth-client-secret"
-
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
 ---
-
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: axiom-server
+  namespace: axiom
+automountServiceAccountToken: true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: axiom-server-argocd
+rules:
+  - apiGroups: ["argoproj.io"]
+    resources: ["applications"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: axiom-server-argocd
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: axiom-server-argocd
+subjects:
+  - kind: ServiceAccount
+    name: axiom-server
+    namespace: axiom
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: axiom-server
   namespace: axiom
+  labels:
+    app.kubernetes.io/name: axiom-server
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/path: "/metrics"
+    prometheus.io/port: "80"
 spec:
-  replicas: 3
+  replicas: 2
+  revisionHistoryLimit: 3
   selector:
     matchLabels:
-      app: axiom-server
+      app.kubernetes.io/name: axiom-server
   template:
     metadata:
       labels:
-        app: axiom-server
+        app.kubernetes.io/name: axiom-server
+        app.kubernetes.io/component: api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "80"
     spec:
+      serviceAccountName: axiom-server
+      automountServiceAccountToken: true
+      terminationGracePeriodSeconds: 30
       securityContext:
         runAsNonRoot: true
-        runAsUser: 1000
-        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+        fsGroup: 101
+        fsGroupChangePolicy: OnRootMismatch
       containers:
-      - name: axiom-server
-        image: axiom-idp/axiom:latest
-        imagePullPolicy: Always
-        ports:
-        - containerPort: 8080
-          name: http
-        envFrom:
-        - configMapRef:
-            name: axiom-config
-        - secretRef:
-            name: axiom-secrets
-        resources:
-          requests:
-            cpu: 100m
-            memory: 128Mi
-          limits:
-            cpu: 500m
-            memory: 512Mi
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          initialDelaySeconds: 10
-          periodSeconds: 10
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          initialDelaySeconds: 5
-          periodSeconds: 5
-        securityContext:
-          allowPrivilegeEscalation: false
-          readOnlyRootFilesystem: true
-          capabilities:
-            drop:
-            - ALL
-        volumeMounts:
-        - name: tmp
-          mountPath: /tmp
+        - name: axiom-server
+          image: ghcr.io/axiom-idp/axiom:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          envFrom:
+            - configMapRef:
+                name: axiom-config
+          env:
+            - name: AXIOM_SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: axiom-runtime-secrets
+                  key: AXIOM_SESSION_SECRET
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /live
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /ready
+              port: http
+            periodSeconds: 2
+            timeoutSeconds: 2
+            failureThreshold: 30
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 101
+            runAsGroup: 101
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: data
+              mountPath: /var/lib/axiom
+            - name: nginx-cache
+              mountPath: /var/cache/nginx
+            - name: nginx-run
+              mountPath: /var/run
       volumes:
-      - name: tmp
-        emptyDir: {}
-
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Mi
+        - name: data
+          persistentVolumeClaim:
+            claimName: axiom-data
+        - name: nginx-cache
+          emptyDir:
+            sizeLimit: 128Mi
+        - name: nginx-run
+          emptyDir:
+            medium: Memory
+            sizeLimit: 32Mi
 ---
-
 apiVersion: v1
 kind: Service
 metadata:
   name: axiom-server
   namespace: axiom
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/path: "/metrics"
+    prometheus.io/port: "80"
 spec:
   selector:
-    app: axiom-server
-  type: LoadBalancer
+    app.kubernetes.io/name: axiom-server
+  type: ClusterIP
   ports:
-  - protocol: TCP
-    port: 80
-    targetPort: 8080
-
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: http
 ---
-
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
@@ -122,18 +219,29 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: axiom-server
-  minReplicas: 3
-  maxReplicas: 10
+  minReplicas: 2
+  maxReplicas: 6
   metrics:
-  - type: Resource
-    resource:
-      name: cpu
-      target:
-        type: Utilization
-        averageUtilization: 70
-  - type: Resource
-    resource:
-      name: memory
-      target:
-        type: Utilization
-        averageUtilization: 80
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: axiom-server
+  namespace: axiom
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: axiom-server

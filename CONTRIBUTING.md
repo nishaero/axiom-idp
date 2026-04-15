@@ -338,7 +338,7 @@ func BenchmarkCatalogQuery(b *testing.B) {
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the Apache 2.0 License.
+By contributing, you agree that your contributions will be licensed under the PolyForm Noncommercial 1.0.0 license.
 
 ---
 

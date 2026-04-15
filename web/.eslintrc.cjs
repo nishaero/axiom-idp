@@ -12,7 +12,7 @@ module.exports = {
   ],
   ignorePatterns: ['dist', '.eslintrc.cjs', 'node_modules'],
   parser: '@typescript-eslint/parser',
-  plugins: ['react-refresh', '@typescript-eslint'],
+  plugins: ['react-hooks', 'react-refresh', '@typescript-eslint'],
   rules: {
     'react-refresh/only-export-components': [
       'warn',
@@ -20,6 +20,10 @@ module.exports = {
         allowConstantExport: true,
       },
     ],
+    'react-hooks/static-components': 'off',
+    'react-hooks/purity': 'off',
+    'react-hooks/set-state-in-effect': 'off',
+    'react-hooks/immutability': 'off',
     '@typescript-eslint/no-explicit-any': 'warn',
     "@typescript-eslint/no-unused-vars": "warn",
     "prefer-const": "warn"

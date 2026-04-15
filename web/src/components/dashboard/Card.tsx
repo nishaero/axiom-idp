@@ -133,7 +133,7 @@ export function MetricDisplay({
                 trend > 0 ? 'text-green-600 dark:text-green-400' : trend < 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-600 dark:text-gray-400'
               }`}
             >
-              {trend > 0 ? '↑' : trend < 0 ? '↓'} {Math.abs(trend)}%
+              {trend > 0 ? '↑' : trend < 0 ? '↓' : '→'} {Math.abs(trend)}%
             </span>
             {trendLabel && (
               <span className="text-xs text-gray-500 dark:text-gray-500">{trendLabel}</span>

@@ -15,12 +15,12 @@ import (
 
 // JenkinsClient represents a Jenkins API client
 type JenkinsClient struct {
-	url         string
-	username    string
-	apiToken    string
-	httpClient  *http.Client
-	config      ClientConfig
-	logger      *logrus.Logger
+	url        string
+	username   string
+	apiToken   string
+	httpClient *http.Client
+	config     ClientConfig
+	logger     *logrus.Entry
 }
 
 // ClientConfig contains Jenkins client configuration
@@ -36,36 +36,36 @@ type ClientConfig struct {
 
 // Job represents a Jenkins job
 type Job struct {
-	Name        string `json:"name"`
-	Color       string `json:"color"`
-	URL         string `json:"url"`
-	Description string `json:"description"`
-	JobType     string `json:"job_type"`
-	Buildable   bool   `json:"buildable"`
-	Queueable   bool   `json:"queueable"`
+	Name         string `json:"name"`
+	Color        string `json:"color"`
+	URL          string `json:"url"`
+	Description  string `json:"description"`
+	JobType      string `json:"job_type"`
+	Buildable    bool   `json:"buildable"`
+	Queueable    bool   `json:"queueable"`
 	CurrentBuild *Build `json:"current_build"`
 }
 
 // Build represents a Jenkins build
 type Build struct {
-	Number       int       `json:"number"`
-	URL          string    `json:"url"`
-	Status       string    `json:"status"`
-	Timestamp    time.Time `json:"timestamp"`
-	Result       string    `json:"result"`
-	Duration     int       `json:"duration"`
-	EstimatedDuration int  `json:"estimated_duration"`
-	CauseSummary string    `json:"cause_summary"`
-	Changesets   []Change  `json:"change_set"`
+	Number            int       `json:"number"`
+	URL               string    `json:"url"`
+	Status            string    `json:"status"`
+	Timestamp         time.Time `json:"timestamp"`
+	Result            string    `json:"result"`
+	Duration          int       `json:"duration"`
+	EstimatedDuration int       `json:"estimated_duration"`
+	CauseSummary      string    `json:"cause_summary"`
+	Changesets        []Change  `json:"change_set"`
 }
 
 // Change represents a change in a build
 type Change struct {
-	Messages     []string `json:"messages"`
-	Author       User     `json:"author"`
-	AuthorEmail  string   `json:"author_email"`
-	CommitId     string   `json:"commit_id"`
-	Comment      string   `json:"comment"`
+	Messages    []string `json:"messages"`
+	Author      User     `json:"author"`
+	AuthorEmail string   `json:"author_email"`
+	CommitId    string   `json:"commit_id"`
+	Comment     string   `json:"comment"`
 }
 
 // User represents a Jenkins user
@@ -83,8 +83,8 @@ type JobParams struct {
 
 // JobProperty represents job properties
 type JobProperty struct {
-	PropertyType string        `json:"type"`
-	Description  string        `json:"description"`
+	PropertyType  string          `json:"type"`
+	Description   string          `json:"description"`
 	Configuration json.RawMessage `json:"configuration"`
 }
 
@@ -101,12 +101,12 @@ type BuildRequest struct {
 
 // BuildStatus represents build status information
 type BuildStatus struct {
-	Status       string    `json:"status"`
-	Result       string    `json:"result"`
-	Duration     int       `json:"duration"`
-	Timestamp    time.Time `json:"timestamp"`
-	FullURL      string    `json:"full_url"`
-	EstimatedDuration int  `json:"estimated_duration"`
+	Status            string    `json:"status"`
+	Result            string    `json:"result"`
+	Duration          int       `json:"duration"`
+	Timestamp         time.Time `json:"timestamp"`
+	FullURL           string    `json:"full_url"`
+	EstimatedDuration int       `json:"estimated_duration"`
 }
 
 // QueueItem represents a build request in the queue
@@ -124,24 +124,24 @@ type QueueItem struct {
 
 // Pipeline represents a Jenkins Pipeline
 type Pipeline struct {
-	Name        string    `json:"name"`
-	URL         string    `json:"url"`
-	Type        string    `json:"type"`
-	LastBuild   *Build    `json:"last_build"`
-	QueueItem   *QueueItem `json:"queue_item"`
-	Properties  []JobProperty `json:"properties"`
-	PipelineType string    `json:"pipeline_type"`
+	Name         string        `json:"name"`
+	URL          string        `json:"url"`
+	Type         string        `json:"type"`
+	LastBuild    *Build        `json:"last_build"`
+	QueueItem    *QueueItem    `json:"queue_item"`
+	Properties   []JobProperty `json:"properties"`
+	PipelineType string        `json:"pipeline_type"`
 }
 
 // JenkinsUser represents a Jenkins user
 type JenkinsUser struct {
-	Login       string    `json:"login"`
-	Name        string    `json:"name"`
-	FullName    string    `json:"full_name"`
-	Email       string    `json:"email"`
-	URL         string    `json:"url"`
-	AvatarURL   string    `json:"avatar_url"`
-	Permissions []string  `json:"permissions"`
+	Login       string   `json:"login"`
+	Name        string   `json:"name"`
+	FullName    string   `json:"full_name"`
+	Email       string   `json:"email"`
+	URL         string   `json:"url"`
+	AvatarURL   string   `json:"avatar_url"`
+	Permissions []string `json:"permissions"`
 }
 
 // NewJenkinsClient creates a new Jenkins client
@@ -264,10 +264,10 @@ func (c *JenkinsClient) BuildJob(ctx context.Context, jobName string, params []J
 }
 
 // GetBuildStatus fetches build status information
-func (c *JenkinsClient) GetBuildStatus(ctx context.Context, jobName string, buildNumber int) (*BuildStatus, error) {
+func (c *JenkinsClient) GetBuildStatus(ctx context.Context, jobName string, buildNumber int) (*Build, error) {
 	c.logger.WithFields(logrus.Fields{
-		"job":        jobName,
-		"build":      buildNumber,
+		"job":   jobName,
+		"build": buildNumber,
 	}).Debug("Fetching build status")
 
 	url := fmt.Sprintf("%s/job/%s/%d/api/json", c.url, url.PathEscape(jobName), buildNumber)
@@ -293,21 +293,14 @@ func (c *JenkinsClient) GetBuildStatus(ctx context.Context, jobName string, buil
 		return nil, fmt.Errorf("failed to decode build response: %w", err)
 	}
 
-	return &BuildStatus{
-		Status:       build.Status,
-		Result:       build.Result,
-		Duration:     build.Duration,
-		Timestamp:    build.Timestamp,
-		FullURL:      build.URL,
-		EstimatedDuration: build.EstimatedDuration,
-	}, nil
+	return &build, nil
 }
 
 // GetBuildLog fetches build log
 func (c *JenkinsClient) GetBuildLog(ctx context.Context, jobName string, buildNumber int) (string, error) {
 	c.logger.WithFields(logrus.Fields{
-		"job":     jobName,
-		"build":   buildNumber,
+		"job":   jobName,
+		"build": buildNumber,
 	}).Debug("Fetching build log")
 
 	url := fmt.Sprintf("%s/job/%s/%d/log", c.url, url.PathEscape(jobName), buildNumber)
@@ -339,8 +332,8 @@ func (c *JenkinsClient) GetBuildLog(ctx context.Context, jobName string, buildNu
 // CancelBuild cancels a running build
 func (c *JenkinsClient) CancelBuild(ctx context.Context, jobName string, buildNumber int) error {
 	c.logger.WithFields(logrus.Fields{
-		"job":     jobName,
-		"build":   buildNumber,
+		"job":   jobName,
+		"build": buildNumber,
 	}).Debug("Cancelling build")
 
 	url := fmt.Sprintf("%s/job/%s/%d/stop", c.url, url.PathEscape(jobName), buildNumber)
@@ -393,19 +386,16 @@ func (c *JenkinsClient) GetJobs(ctx context.Context) ([]Job, error) {
 
 	var jobs []Job
 	if jobsData, exists := response["jobs"]; exists {
-		var jobsRaw []map[string]interface{}
-		if err := json.Marshal(jobsData); err != nil {
-			return nil, err
-		}
-		if err := json.Unmarshal(jobsRaw, &jobsData); err != nil {
-			return nil, err
-		}
-
-		for _, jobData := range jobsData.([]interface{}) {
-			jobJSON, _ := json.Marshal(jobData)
-			var job Job
-			json.Unmarshal(jobJSON, &job)
-			jobs = append(jobs, job)
+		if j, ok := jobsData.([]interface{}); ok {
+			for _, item := range j {
+				if job, ok := item.(map[string]interface{}); ok {
+					jobs = append(jobs, Job{
+						Name:  fmt.Sprintf("%v", job["name"]),
+						URL:   fmt.Sprintf("%v", job["url"]),
+						Color: fmt.Sprintf("%v", job["color"]),
+					})
+				}
+			}
 		}
 	}
 
@@ -504,12 +494,21 @@ func (c *JenkinsClient) GetQueueItems(ctx context.Context) ([]QueueItem, error) 
 		if queueRaw, ok := queueData.(map[string]interface{}); ok {
 			if itemsData, exists := queueRaw["items"]; exists {
 				var itemsRaw []interface{}
-				json.Unmarshal([]byte(fmt.Sprint(itemsData)), &itemsRaw)
-				for _, itemRaw := range itemsRaw {
-					itemJSON, _ := json.Marshal(itemRaw)
-					var item QueueItem
-					json.Unmarshal(itemJSON, &item)
-					items = append(items, item)
+				if itemsJSON, err := json.Marshal(itemsData); err == nil {
+					if err := json.Unmarshal(itemsJSON, &itemsRaw); err != nil {
+						return nil, fmt.Errorf("failed to parse queue items: %w", err)
+					}
+					for _, itemRaw := range itemsRaw {
+						itemJSON, err := json.Marshal(itemRaw)
+						if err != nil {
+							return nil, fmt.Errorf("failed to encode queue item: %w", err)
+						}
+						var item QueueItem
+						if err := json.Unmarshal(itemJSON, &item); err != nil {
+							return nil, fmt.Errorf("failed to decode queue item: %w", err)
+						}
+						items = append(items, item)
+					}
 				}
 			}
 		}
@@ -601,10 +600,10 @@ func (c *JenkinsClient) GetHealthStatus(ctx context.Context) map[string]interfac
 	defer resp.Body.Close()
 
 	return map[string]interface{}{
-		"status":    "healthy",
-		"timeout":   c.config.Timeout.String(),
-		"url":       c.url,
-		"has_auth":  c.username != "" && c.apiToken != "",
+		"status":   "healthy",
+		"timeout":  c.config.Timeout.String(),
+		"url":      c.url,
+		"has_auth": c.username != "" && c.apiToken != "",
 	}
 }
 
@@ -641,7 +640,9 @@ func (c *JenkinsClient) getBuildNumber(location string) (int, error) {
 	}
 
 	var buildNumber int
-	fmt.Sscanf(string(parts[len(parts)-1]), "%d", &buildNumber)
+	if _, err := fmt.Sscanf(string(parts[len(parts)-1]), "%d", &buildNumber); err != nil {
+		return 0, fmt.Errorf("failed to scan build number from location %q: %w", location, err)
+	}
 
 	if buildNumber == 0 {
 		return 0, fmt.Errorf("failed to parse build number from: %s", location)

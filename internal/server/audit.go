@@ -3,10 +3,15 @@ package server
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"sync"
 	"time"
+
+	"github.com/axiom-idp/axiom/internal/auth"
+	"github.com/sirupsen/logrus"
 )
 
-// AuditLog represents an audit log entry
+// AuditLog represents an audit log entry.
 type AuditLog struct {
 	ID        string                 `json:"id"`
 	UserID    string                 `json:"user_id"`
@@ -18,65 +23,264 @@ type AuditLog struct {
 	Error     string                 `json:"error,omitempty"`
 }
 
-// Auditor logs all server actions
+// Auditor logs all server actions.
 type Auditor struct {
-	logs   []AuditLog
+	mu      sync.RWMutex
+	logs    []AuditLog
+	metrics *Metrics
+	store   runtimeStateStore
+	logger  *logrus.Logger
 }
 
-// NewAuditor creates a new auditor
+type AuditStats struct {
+	Entries      int       `json:"entries"`
+	LastEntryAt  time.Time `json:"last_entry_at,omitempty"`
+	ErrorCount   int       `json:"error_count"`
+	DeniedCount  int       `json:"denied_count"`
+	SuccessCount int       `json:"success_count"`
+}
+
+// NewAuditor creates a new auditor.
 func NewAuditor() *Auditor {
 	return &Auditor{
-		logs: make([]AuditLog, 0),
+		logs: make([]AuditLog, 0, 256),
 	}
 }
 
-// Log records an audit log entry
+// SetMetrics wires the audit subsystem into the shared telemetry collector.
+func (a *Auditor) SetMetrics(metrics *Metrics) {
+	if a == nil {
+		return
+	}
+
+	a.mu.Lock()
+	a.metrics = metrics
+	a.mu.Unlock()
+}
+
+// SetStore wires the audit subsystem into the shared runtime state store.
+func (a *Auditor) SetStore(store runtimeStateStore) {
+	if a == nil {
+		return
+	}
+
+	a.mu.Lock()
+	a.store = store
+	a.mu.Unlock()
+}
+
+// SetLogger wires warnings for store failures into the application logger.
+func (a *Auditor) SetLogger(logger *logrus.Logger) {
+	if a == nil {
+		return
+	}
+
+	a.mu.Lock()
+	a.logger = logger
+	a.mu.Unlock()
+}
+
+// Log records an audit log entry.
 func (a *Auditor) Log(ctx context.Context, userID, action, resource, status string, details map[string]interface{}) {
-	logEntry := AuditLog{
+	if a == nil {
+		return
+	}
+
+	entry := AuditLog{
 		ID:        fmt.Sprintf("audit-%d", time.Now().UnixNano()),
 		UserID:    userID,
 		Action:    action,
 		Resource:  resource,
 		Status:    status,
-		Details:   details,
-		CreatedAt: time.Now(),
+		Details:   cloneDetails(details),
+		CreatedAt: time.Now().UTC(),
 	}
 
-	a.logs = append(a.logs, logEntry)
+	a.mu.Lock()
+	a.logs = append(a.logs, entry)
+	metrics := a.metrics
+	store := a.store
+	logger := a.logger
+	a.mu.Unlock()
+
+	if store != nil {
+		if err := store.AppendAudit(ctx, entry); err != nil && logger != nil {
+			logger.WithError(err).Warn("failed to persist audit event to shared runtime state")
+		}
+	}
+
+	if metrics != nil {
+		metrics.RecordAudit(status)
+	}
 }
 
-// LogError records an error in audit log
+// LogError records an error in audit log.
 func (a *Auditor) LogError(ctx context.Context, userID, action, resource string, err error) {
-	logEntry := AuditLog{
+	if a == nil {
+		return
+	}
+
+	entry := AuditLog{
 		ID:        fmt.Sprintf("audit-%d", time.Now().UnixNano()),
 		UserID:    userID,
 		Action:    action,
 		Resource:  resource,
 		Status:    "error",
-		CreatedAt: time.Now(),
+		CreatedAt: time.Now().UTC(),
 		Error:     err.Error(),
 	}
 
-	a.logs = append(a.logs, logEntry)
-}
+	a.mu.Lock()
+	a.logs = append(a.logs, entry)
+	metrics := a.metrics
+	store := a.store
+	logger := a.logger
+	a.mu.Unlock()
 
-// GetLogs returns audit logs with optional filtering
-func (a *Auditor) GetLogs(userID string, limit int) []AuditLog {
-	if limit == 0 {
-		limit = 100
-	}
-
-	var filtered []AuditLog
-	for _, log := range a.logs {
-		if userID == "" || log.UserID == userID {
-			filtered = append(filtered, log)
+	if store != nil {
+		if err := store.AppendAudit(ctx, entry); err != nil && logger != nil {
+			logger.WithError(err).Warn("failed to persist audit error to shared runtime state")
 		}
 	}
 
-	// Return last 'limit' entries
+	if metrics != nil {
+		metrics.RecordAudit("error")
+	}
+}
+
+// GetLogs returns audit logs with optional filtering.
+func (a *Auditor) GetLogs(userID string, limit int) []AuditLog {
+	if a == nil {
+		return nil
+	}
+	if limit <= 0 {
+		limit = 100
+	}
+
+	a.mu.RLock()
+	store := a.store
+	a.mu.RUnlock()
+	if store != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		if logs, err := store.QueryAudit(ctx, userID, limit); err == nil {
+			return logs
+		}
+	}
+
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	filtered := make([]AuditLog, 0, len(a.logs))
+	for _, log := range a.logs {
+		if userID == "" || log.UserID == userID {
+			filtered = append(filtered, cloneAuditLog(log))
+		}
+	}
+
 	if len(filtered) > limit {
-		return filtered[len(filtered)-limit:]
+		return append([]AuditLog(nil), filtered[len(filtered)-limit:]...)
 	}
 
 	return filtered
+}
+
+// Middleware records request audit entries.
+func (a *Auditor) Middleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if a == nil {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		recorder := &auditResponseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+		start := time.Now()
+		next.ServeHTTP(recorder, r)
+
+		userID := auth.UserIDFromContext(r.Context())
+		statusLabel := "success"
+		switch {
+		case recorder.statusCode >= http.StatusInternalServerError:
+			statusLabel = "error"
+		case recorder.statusCode == http.StatusUnauthorized || recorder.statusCode == http.StatusForbidden:
+			statusLabel = "denied"
+		}
+
+		details := map[string]interface{}{
+			"method":       r.Method,
+			"path":         r.URL.Path,
+			"remote_addr":  r.RemoteAddr,
+			"status_code":  recorder.statusCode,
+			"duration_ms":  time.Since(start).Milliseconds(),
+			"user_agent":   r.UserAgent(),
+			"content_type": r.Header.Get("Content-Type"),
+			"request_id":   r.Header.Get("X-Request-ID"),
+		}
+		a.Log(r.Context(), userID, "http_request", r.URL.Path, statusLabel, details)
+	})
+}
+
+func (a *Auditor) Stats() AuditStats {
+	if a == nil {
+		return AuditStats{}
+	}
+
+	a.mu.RLock()
+	store := a.store
+	a.mu.RUnlock()
+	if store != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		if stats, err := store.AuditStats(ctx); err == nil {
+			return stats
+		}
+	}
+
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	stats := AuditStats{Entries: len(a.logs)}
+	for _, entry := range a.logs {
+		if entry.CreatedAt.After(stats.LastEntryAt) {
+			stats.LastEntryAt = entry.CreatedAt
+		}
+
+		switch entry.Status {
+		case "error":
+			stats.ErrorCount++
+		case "denied":
+			stats.DeniedCount++
+		default:
+			stats.SuccessCount++
+		}
+	}
+
+	return stats
+}
+
+type auditResponseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (w *auditResponseWriter) WriteHeader(code int) {
+	w.statusCode = code
+	w.ResponseWriter.WriteHeader(code)
+}
+
+func cloneDetails(details map[string]interface{}) map[string]interface{} {
+	if len(details) == 0 {
+		return map[string]interface{}{}
+	}
+
+	out := make(map[string]interface{}, len(details))
+	for key, value := range details {
+		out[key] = value
+	}
+	return out
+}
+
+func cloneAuditLog(log AuditLog) AuditLog {
+	log.Details = cloneDetails(log.Details)
+	return log
 }

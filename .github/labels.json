@@ -1,0 +1,17 @@
+[
+  {"name":"bug","color":"d73a4a","description":"Something is not working"},
+  {"name":"enhancement","color":"a2eeef","description":"New feature or improvement"},
+  {"name":"documentation","color":"0075ca","description":"Documentation changes"},
+  {"name":"security","color":"b60205","description":"Security-related work"},
+  {"name":"backend","color":"5319e7","description":"Backend changes"},
+  {"name":"frontend","color":"1d76db","description":"Frontend changes"},
+  {"name":"ci-cd","color":"0e8a16","description":"CI/CD and delivery pipeline changes"},
+  {"name":"needs-triage","color":"fbca04","description":"Awaiting maintainer triage"},
+  {"name":"needs-review","color":"c2e0c6","description":"Awaiting code review"},
+  {"name":"stale","color":"ededed","description":"Inactive and awaiting confirmation"},
+  {"name":"blocked","color":"000000","description":"Blocked by dependency or decision"},
+  {"name":"release-risk-high","color":"b60205","description":"High release risk"},
+  {"name":"release-risk-medium","color":"fbca04","description":"Medium release risk"},
+  {"name":"release-risk-low","color":"0e8a16","description":"Low release risk"},
+  {"name":"compliance","color":"5319e7","description":"Compliance or audit evidence work"}
+]

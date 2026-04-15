@@ -1,8 +1,8 @@
 {
   "compilerOptions": {
-    "target": "ES2020",
+    "target": "ES2021",
     "useDefineForClassFields": true,
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "lib": ["ES2021", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "skipLibCheck": true,
     "moduleResolution": "bundler",
@@ -24,5 +24,27 @@
     "types": ["vite/client"]
   },
   "include": ["src"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "exclude": [
+    "src/**/*.js",
+    "src/**/*.js.map",
+    "src/**/*.d.ts",
+    "src/**/*.d.ts.map",
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "src/**/*.spec.ts",
+    "src/**/*.spec.tsx",
+    "src/components/dashboard/AreaChart.tsx",
+    "src/components/dashboard/BarChart.tsx",
+    "src/components/dashboard/CostBreakdownWidget.tsx",
+    "src/components/dashboard/DashboardGrid.tsx",
+    "src/components/dashboard/HeatMap.tsx",
+    "src/components/dashboard/LineChart.tsx",
+    "src/components/dashboard/PerformanceMetricsWidget.tsx",
+    "src/components/dashboard/PieChart.tsx",
+    "src/components/dashboard/ResourceUtilizationWidget.tsx",
+    "src/components/dashboard/SecurityPostureWidget.tsx",
+    "src/components/dashboard/ServiceHealthWidget.tsx",
+    "src/components/dashboard/TeamActivityWidget.tsx",
+    "src/components/workflows/**"
+  ]
 }

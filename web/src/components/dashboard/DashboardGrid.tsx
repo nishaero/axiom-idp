@@ -61,9 +61,13 @@ function WidgetCell({ widget, children }: WidgetCellProps) {
 
 interface DashboardGridProps {
   customView?: string
+  onCustomViewChange?: (view: string) => void
 }
 
-export default function DashboardGrid({ customView = 'default' }: { customView?: string }) {
+export default function DashboardGrid({
+  customView = 'default',
+  onCustomViewChange,
+}: DashboardGridProps) {
   const { widgets } = useDashboardStore()
 
   const visibleWidgets = useMemo(
@@ -105,18 +109,21 @@ export default function DashboardGrid({ customView = 'default' }: { customView?:
             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
             <span className="text-sm text-gray-600 dark:text-gray-400">Live</span>
           </div>
-          {/* View Selector */}
-          <div className="flex items-center gap-2">
-            <select
-              className="px-3 py-2 bg-white dark:bg-dark-800 border border-gray-300 dark:border-dark-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500"
-              defaultValue="default"
-            >
-              <option value="default">Default View</option>
-              <option value="overview">Overview</option>
-              <option value="infrastructure">Infrastructure</option>
-              <option value="financial">Financial</option>
-            </select>
-          </div>
+          {onCustomViewChange ? null : (
+            <div className="flex items-center gap-2">
+              <select
+                value={customView}
+                onChange={(event) => onCustomViewChange?.(event.target.value)}
+                className="px-3 py-2 bg-white dark:bg-dark-800 border border-gray-300 dark:border-dark-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                aria-label="Dashboard view"
+              >
+                <option value="default">Default View</option>
+                <option value="overview">Overview</option>
+                <option value="infrastructure">Infrastructure</option>
+                <option value="financial">Financial</option>
+              </select>
+            </div>
+          )}
         </div>
       </div>
 

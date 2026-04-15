@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
@@ -46,5 +48,36 @@ func TestRBACRemoveRole(t *testing.T) {
 
 	if rbac.CanAccess("user-1", "catalog", "read") {
 		t.Error("User should not have access after role removal")
+	}
+}
+
+func TestRBACMiddlewareUsesContextRoles(t *testing.T) {
+	rbac := NewRBAC()
+	handler := rbac.Middleware("catalog", "read")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/catalog/services", nil)
+	req = req.WithContext(ContextWithUser(req.Context(), "user-1", []string{RoleViewer}))
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d", w.Code)
+	}
+}
+
+func TestRBACMiddlewareRejectsUnauthorized(t *testing.T) {
+	rbac := NewRBAC()
+	handler := rbac.Middleware("catalog", "read")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/catalog/services", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("Expected status 401, got %d", w.Code)
 	}
 }

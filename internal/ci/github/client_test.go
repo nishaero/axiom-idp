@@ -1,8 +1,12 @@
 package github
 
 import (
+	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -23,12 +27,12 @@ func createTestClient(t *testing.T) (*GitHubClient, *httptest.Server) {
 		switch r.URL.Path {
 		case "/repos/test-owner/test-repo":
 			json.NewEncoder(w).Encode(map[string]interface{}{
-				"id": 1,
-				"name": "test-repo",
+				"id":        1,
+				"name":      "test-repo",
 				"full_name": "test-owner/test-repo",
-				"html_url": "https://github.com/test-owner/test-repo",
-				"language": "go",
-				"private": false,
+				"html_url":  "https://github.com/test-owner/test-repo",
+				"language":  "go",
+				"private":   false,
 				"owner": map[string]string{
 					"login": "test-owner",
 				},
@@ -116,12 +120,14 @@ func createTestWebhookHandler(t *testing.T) (*WebhookHandler, *httptest.Server) 
 }
 
 func TestWebhookHandler_Handle(t *testing.T) {
-	handler, server := createTestWebhookHandler(t)
+	_, server := createTestWebhookHandler(t)
 	defer server.Close()
 
-	// Create a mock push event payload
-	payload := map[string]string{
+	payload := map[string]interface{}{
 		"action": "push",
+		"repository": map[string]interface{}{
+			"full_name": "test-owner/test-repo",
+		},
 	}
 	payloadJSON, _ := json.Marshal(payload)
 
@@ -129,6 +135,11 @@ func TestWebhookHandler_Handle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
 	}
+	mac := hmac.New(sha256.New, []byte("secret"))
+	_, _ = mac.Write(payloadJSON)
+	req.Header.Set("X-Hub-Signature-256", fmt.Sprintf("sha256=%x", mac.Sum(nil)))
+	req.Header.Set("X-GitHub-Event", "push")
+	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -184,7 +195,7 @@ func TestWorkflowProcessor_Configure(t *testing.T) {
 		t.Error("MaxConcurrentRuns should be set")
 	}
 
-	if config.RetryDelay < 1 * time.Second {
+	if config.RetryDelay < 1*time.Second {
 		t.Error("RetryDelay should be at least 1 second")
 	}
 }
@@ -192,9 +203,9 @@ func TestWorkflowProcessor_Configure(t *testing.T) {
 func TestPendingWorkflow(t *testing.T) {
 	workflow := &PendingWorkflow{
 		WorkflowRun: &WorkflowRun{
-			ID:       123,
-			Name:     "test-workflow",
-			Status:   "in_progress",
+			ID:         123,
+			Name:       "test-workflow",
+			Status:     "in_progress",
 			Conclusion: "",
 		},
 		StartedAt:  time.Now(),
@@ -258,19 +269,19 @@ func TestWorkflowRun_Types(t *testing.T) {
 // Test repository types
 func TestRepository_Types(t *testing.T) {
 	repo := &Repository{
-		ID:           1,
-		Name:         "test-repo",
-		FullName:     "test-owner/test-repo",
-		Description:  "Test repository",
-		HTMLURL:      "https://github.com/test-owner/test-repo",
-		SURL:         "https://github.com/test-owner/test-repo.git",
-		CloneURL:     "https://github.com/test-owner/test-repo.git",
-		GitURL:       "git://github.com/test-owner/test-repo.git",
-		SSHURL:       "git@github.com:test-owner/test-repo.git",
-		Language:     "go",
-		Visibility:   "public",
+		ID:            1,
+		Name:          "test-repo",
+		FullName:      "test-owner/test-repo",
+		Description:   "Test repository",
+		HTMLURL:       "https://github.com/test-owner/test-repo",
+		SURL:          "https://github.com/test-owner/test-repo.git",
+		CloneURL:      "https://github.com/test-owner/test-repo.git",
+		GitURL:        "git://github.com/test-owner/test-repo.git",
+		SSHURL:        "git@github.com:test-owner/test-repo.git",
+		Language:      "go",
+		Visibility:    "public",
 		DefaultBranch: "main",
-		Private:      false,
+		Private:       false,
 		Owner: User{
 			Login: "test-owner",
 			ID:    1,
@@ -307,8 +318,8 @@ func TestPREvent_Types(t *testing.T) {
 			FullName: "test-owner/test-repo",
 		},
 		Head: struct {
-			Ref string `json:"ref"`
-			SHA string `json:"sha"`
+			Ref  string `json:"ref"`
+			SHA  string `json:"sha"`
 			User User   `json:"user"`
 		}{
 			Ref: "feature-branch",
@@ -319,8 +330,8 @@ func TestPREvent_Types(t *testing.T) {
 			},
 		},
 		Base: struct {
-			Ref string `json:"ref"`
-			SHA string `json:"sha"`
+			Ref  string `json:"ref"`
+			SHA  string `json:"sha"`
 			User User   `json:"user"`
 		}{
 			Ref: "main",
