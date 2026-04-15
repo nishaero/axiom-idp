@@ -210,10 +210,12 @@ func (h *WebhookHandler) parseWebhookEvent(payload []byte, eventType string) (*W
 
 	// Parse author
 	if authorRaw, exists := raw["author"]; exists {
-		authorJSON, _ := json.Marshal(authorRaw)
-		var author User
-		json.Unmarshal(authorJSON, &author)
-		event.Author = &author
+		if authorJSON, err := json.Marshal(authorRaw); err == nil {
+			var author User
+			if err := json.Unmarshal(authorJSON, &author); err == nil {
+				event.Author = &author
+			}
+		}
 	}
 
 	// Parse event name
@@ -230,7 +232,9 @@ func (h *WebhookHandler) parseWebhookEvent(payload []byte, eventType string) (*W
 		if commitsRaw, exists := raw["commits"]; exists {
 			var commits []Commit
 			if commitsJSON, err := json.Marshal(commitsRaw); err == nil {
-				json.Unmarshal(commitsJSON, &commits)
+				if err := json.Unmarshal(commitsJSON, &commits); err != nil {
+					h.logger.WithError(err).Debug("failed to parse GitLab webhook commits")
+				}
 			}
 			event.Commits = commits
 		}
@@ -239,7 +243,9 @@ func (h *WebhookHandler) parseWebhookEvent(payload []byte, eventType string) (*W
 		if labelsRaw, exists := raw["labels"]; exists {
 			var labels []map[string]interface{}
 			if labelsJSON, err := json.Marshal(labelsRaw); err == nil {
-				json.Unmarshal(labelsJSON, &labels)
+				if err := json.Unmarshal(labelsJSON, &labels); err != nil {
+					h.logger.WithError(err).Debug("failed to parse GitLab webhook labels")
+				}
 			}
 			event.Labels = labels
 		}
@@ -247,64 +253,74 @@ func (h *WebhookHandler) parseWebhookEvent(payload []byte, eventType string) (*W
 	case "Pipeline Hook", "Pipeline Status Hook":
 		// Parse pipeline
 		if pipelineRaw, exists := raw["pipeline"]; exists {
-			pipelineJSON, _ := json.Marshal(pipelineRaw)
-			var pipeline Pipeline
-			if err := json.Unmarshal(pipelineJSON, &pipeline); err == nil {
-				event.Pipeline = &pipeline
+			if pipelineJSON, err := json.Marshal(pipelineRaw); err == nil {
+				var pipeline Pipeline
+				if err := json.Unmarshal(pipelineJSON, &pipeline); err == nil {
+					event.Pipeline = &pipeline
+				}
 			}
 		}
 
 		// Parse build (for compatibility)
 		if buildRaw, exists := raw["build"]; exists {
-			buildJSON, _ := json.Marshal(buildRaw)
-			var build Job
-			if err := json.Unmarshal(buildJSON, &build); err == nil {
-				event.Job = &build
+			if buildJSON, err := json.Marshal(buildRaw); err == nil {
+				var build Job
+				if err := json.Unmarshal(buildJSON, &build); err == nil {
+					event.Job = &build
+				}
 			}
 		}
 
 	case "Job Hook":
 		// Parse job
 		if jobRaw, exists := raw["build"]; exists {
-			jobJSON, _ := json.Marshal(jobRaw)
-			var job Job
-			if err := json.Unmarshal(jobJSON, &job); err == nil {
-				event.Job = &job
+			if jobJSON, err := json.Marshal(jobRaw); err == nil {
+				var job Job
+				if err := json.Unmarshal(jobJSON, &job); err == nil {
+					event.Job = &job
+				}
 			}
 		}
 
 		// Parse runner
 		if runnerRaw, exists := raw["runner"]; exists {
-			runnerJSON, _ := json.Marshal(runnerRaw)
-			var runner Runner
-			if err := json.Unmarshal(runnerJSON, &runner); err == nil {
-				event.Runner = &runner
+			if runnerJSON, err := json.Marshal(runnerRaw); err == nil {
+				var runner Runner
+				if err := json.Unmarshal(runnerJSON, &runner); err == nil {
+					event.Runner = &runner
+				}
 			}
 		}
 
 	case "Merge Request Hook":
 		// Parse merge request
 		if mrRaw, exists := raw["object_attributes"]; exists {
-			mrJSON, _ := json.Marshal(mrRaw)
-			var mr MergeRequest
-			if err := json.Unmarshal(mrJSON, &mr); err == nil {
-				event.MergeRequest = &mr
+			if mrJSON, err := json.Marshal(mrRaw); err == nil {
+				var mr MergeRequest
+				if err := json.Unmarshal(mrJSON, &mr); err == nil {
+					event.MergeRequest = &mr
+				}
 			}
 		}
 
 		// Also try parsing from object_event (newer GitLab versions)
 		if mrRaw, exists := raw["merge_request"]; exists {
-			mrJSON, _ := json.Marshal(mrRaw)
-			var mr MergeRequest
-			if err := json.Unmarshal(mrJSON, &mr); err == nil {
-				event.MergeRequest = &mr
+			if mrJSON, err := json.Marshal(mrRaw); err == nil {
+				var mr MergeRequest
+				if err := json.Unmarshal(mrJSON, &mr); err == nil {
+					event.MergeRequest = &mr
+				}
 			}
 		}
 
 		// Parse labels if present
 		if labelsRaw, exists := raw["labels"]; exists {
 			var labels []map[string]interface{}
-			json.Unmarshal([]byte(fmt.Sprint(labelsRaw)), &labels)
+			if labelsJSON, err := json.Marshal(labelsRaw); err == nil {
+				if err := json.Unmarshal(labelsJSON, &labels); err != nil {
+					h.logger.WithError(err).Debug("failed to parse GitLab merge request labels")
+				}
+			}
 			event.Labels = labels
 		}
 
@@ -318,10 +334,12 @@ func (h *WebhookHandler) parseWebhookEvent(payload []byte, eventType string) (*W
 // parseProject parses a project object from raw map
 func parseProject(raw map[string]interface{}, key string) *Project {
 	if projectRaw, exists := raw[key]; exists {
-		projectJSON, _ := json.Marshal(projectRaw)
-		project := &Project{}
-		json.Unmarshal(projectJSON, project)
-		return project
+		if projectJSON, err := json.Marshal(projectRaw); err == nil {
+			project := &Project{}
+			if err := json.Unmarshal(projectJSON, project); err == nil {
+				return project
+			}
+		}
 	}
 
 	return &Project{}

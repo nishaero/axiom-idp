@@ -88,7 +88,7 @@ func (o *gitOpsOrchestrator) ApplyArgoCDDeployment(ctx context.Context, req depl
 	defer os.RemoveAll(gitCtx.LocalDir)
 
 	manifestPath := filepath.Join(gitCtx.LocalDir, filepath.FromSlash(gitCtx.Path))
-	if err := os.MkdirAll(manifestPath, 0o755); err != nil {
+	if err := os.MkdirAll(manifestPath, 0o750); err != nil {
 		return nil, fmt.Errorf("failed to create manifest path: %w", err)
 	}
 
@@ -162,7 +162,7 @@ func (o *gitOpsOrchestrator) ApplyInfrastructure(ctx context.Context, req infras
 	defer os.RemoveAll(gitCtx.LocalDir)
 
 	manifestPath := filepath.Join(gitCtx.LocalDir, filepath.FromSlash(gitCtx.Path))
-	if err := os.MkdirAll(manifestPath, 0o755); err != nil {
+	if err := os.MkdirAll(manifestPath, 0o750); err != nil {
 		return nil, fmt.Errorf("failed to create infra manifest path: %w", err)
 	}
 
@@ -765,7 +765,7 @@ func indentYAMLMap(values map[string]string, spaces int) string {
 
 func writeFiles(dir string, files map[string]string) error {
 	for name, content := range files {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {
 			return fmt.Errorf("failed to write %s: %w", name, err)
 		}
 	}
