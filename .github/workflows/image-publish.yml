@@ -73,7 +73,7 @@ jobs:
         run: docker pull ${{ env.IMAGE_NAME }}:${{ github.sha }}
 
       - name: Install cosign
-        uses: sigstore/cosign-installer@v4
+        uses: sigstore/cosign-installer@v4.1.1
 
       - name: Sign published validation image
         run: cosign sign --yes ${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}

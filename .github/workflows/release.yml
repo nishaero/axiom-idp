@@ -110,7 +110,7 @@ jobs:
             -C /tmp/dist axiom-server-${{ matrix.os }}-${{ matrix.arch }}
 
       - name: Install cosign
-        uses: sigstore/cosign-installer@v4
+        uses: sigstore/cosign-installer@v4.1.1
 
       - name: Sign release tarball
         run: |
@@ -193,7 +193,7 @@ jobs:
         run: docker pull ${{ env.IMAGE_NAME }}:latest
 
       - name: Install cosign
-        uses: sigstore/cosign-installer@v4
+        uses: sigstore/cosign-installer@v4.1.1
 
       - name: Sign published image
         run: cosign sign --yes ${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
