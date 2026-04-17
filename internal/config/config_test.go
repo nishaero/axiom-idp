@@ -149,7 +149,7 @@ func TestValidateAcceptsPostgresConfig(t *testing.T) {
 		RateLimitRequests: 100,
 		RateLimitWindow:   time.Minute,
 		DBDriver:          "postgres",
-		DBURL:             "postgres://axiom:axiom@localhost:5432/axiom?sslmode=disable",
+			DBURL:             "postgres://localhost:5432/axiom?sslmode=disable",
 		AIBackend:         "local",
 		AITimeout:         30 * time.Second,
 		AIMaxTokens:       512,

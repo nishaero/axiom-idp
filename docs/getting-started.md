@@ -55,7 +55,7 @@ AXIOM_AI_BACKEND=local
 
 # Optional shared runtime state
 # AXIOM_DB_DRIVER=postgres
-# AXIOM_DB_URL=postgres://axiom:secret@postgres.default.svc.cluster.local:5432/axiom?sslmode=disable
+# AXIOM_DB_URL=postgres://postgres.default.svc.cluster.local:5432/axiom?sslmode=disable
 ```
 
 Load and start:

@@ -1,12 +1,12 @@
 # Platform Readiness Assessment
 
-Updated: 2026-04-15
+Updated: 2026-04-17
 
 ## Current Launch State
 
-Axiom IDP is in launch-candidate state on the current branch.
+Axiom IDP is in release-readiness hardening on `main`.
 
-Validated on the current revision:
+Validated locally on the current revision:
 
 - `go test ./...`
 - `go vet ./...`
@@ -20,6 +20,8 @@ Validated on the current revision:
   - `Code Quality Gate`
   - `Security Scan`
   - `Dependency Review`
+  - `Image Publish Validation`
+  - `Deploy Validation`
 
 Recent observability additions on this branch:
 
@@ -33,7 +35,7 @@ Recent observability additions on this branch:
 - Signed session tokens, RBAC, security headers, rate limiting, and audit middleware
 - Local OpenAI-compatible AI runtime using a provider such as Ollama with deterministic fallback behavior
 - GitHub-native SDLC automation with required quality and security gates
-- GHCR image publication, semver-tagged release flow, image signing, SBOM generation, and provenance attestation
+- GHCR image publication, automatic semver tagging after merged-commit validation, image signing, SBOM generation, and provenance attestation
 - Docker and Kubernetes deployment paths with explicit `/live`, `/ready`, and `/health` endpoints
 - Backend-fed platform status surfaced in the UI through `/api/v1/platform/status`
 - Prometheus-compatible metrics exposure through `/metrics`
@@ -64,7 +66,7 @@ It is not trying to win as a generic developer portal clone. The strongest diffe
 
 ## Remaining Boundaries
 
-This branch is validated and deployable, but a few items are still beyond the current launch baseline:
+The platform is deployable, but a few items are still beyond the current launch baseline:
 
 - formal BSI C5 certification still requires organizational controls, audit evidence, and external review
 - the validation harness assumes an OpenAI-compatible request contract, with Ollama used as the local implementation exercised here
@@ -77,10 +79,10 @@ This branch is validated and deployable, but a few items are still beyond the cu
 
 ## Recommendation
 
-The repository is ready to move from implementation to controlled launch activity:
+The repository is ready to move from merged-main validation to the first automated release:
 
-1. merge the validated branch
-2. cut a semantic version tag
+1. confirm the full required `main` workflow set is green
+2. confirm `Auto Tag Release` creates the first semantic version tag
 3. verify the published GHCR image signature, SBOM, and provenance
 4. deploy to the target environment with a real session secret, PostgreSQL-backed runtime state, and production backing services
 5. complete the final organization-specific readiness checklist for secrets, HA, observability, and compliance evidence
