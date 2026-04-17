@@ -219,6 +219,8 @@ jobs:
             --certificate-identity-regexp "^https://github.com/${{ github.repository }}/.github/workflows/release.yml@refs/tags/${{ github.ref_name }}$"
 
       - name: Verify image attestation
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh attestation verify oci://${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }} --repo ${{ github.repository }}
 
       - name: Upload release SBOM artifact
