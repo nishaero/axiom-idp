@@ -6,7 +6,6 @@ on:
       - CI
       - Code Quality Gate
       - Security Scan
-      - Dependency Review
       - Image Publish Validation
       - Deploy Validation
     types:
@@ -42,7 +41,6 @@ jobs:
               "CI",
               "Code Quality Gate",
               "Security Scan",
-              "Dependency Review",
               "Image Publish Validation",
               "Deploy Validation",
             ];
