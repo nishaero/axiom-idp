@@ -1,0 +1,39 @@
+changelog:
+  exclude:
+    labels:
+      - ignore-for-release
+      - stale
+      - needs-triage
+      - needs-review
+    authors:
+      - github-actions[bot]
+      - dependabot[bot]
+  categories:
+    - title: Breaking Changes
+      labels:
+        - breaking-change
+        - semver-major
+    - title: Platform Features
+      labels:
+        - enhancement
+        - backend
+        - frontend
+      exclude:
+        labels:
+          - documentation
+          - ci-cd
+          - compliance
+    - title: Security And Compliance
+      labels:
+        - security
+        - compliance
+    - title: Delivery And Operations
+      labels:
+        - ci-cd
+    - title: Documentation
+      labels:
+        - documentation
+    - title: Fixes And Maintenance
+      labels:
+        - bug
+        - "*"

@@ -12,6 +12,8 @@ Axiom uses a GitHub-native release chain:
 4. GitHub release creation
 5. GHCR publication with signing, SBOMs, and attestations
 
+Release notes are generated from GitHub's release-note engine and categorized through [.github/release.yml](/home/nishaero/ai-workspace/axiom-idp-release-hardening/.github/release.yml) so each published release includes grouped pull requests, contributors, and a full changelog link.
+
 ## Required Workflow Sequence
 
 Pull requests must pass:
