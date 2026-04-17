@@ -152,11 +152,27 @@ case "${MODE}" in
     configure_axiom_runtime
     kubectl -n "${NAMESPACE}" set image deployment/axiom-server axiom-server="${IMAGE_NAME}"
     kubectl -n "${NAMESPACE}" rollout status deployment/axiom-server --timeout=180s
-    kubectl -n "${NAMESPACE}" wait --for=condition=Ready pod -l app.kubernetes.io/name=axiom-server --timeout=120s >/dev/null
+
+    current_hash=$(
+      kubectl -n "${NAMESPACE}" get replicasets \
+        -l app.kubernetes.io/name=axiom-server \
+        --sort-by=.metadata.creationTimestamp \
+        -o jsonpath='{.items[-1:].metadata.labels.pod-template-hash}'
+    )
+    if [[ -z "${current_hash}" ]]; then
+      echo "Failed to determine the current axiom-server replica set"
+      exit 1
+    fi
+
+    kubectl -n "${NAMESPACE}" wait \
+      --for=condition=Ready \
+      pod \
+      -l "app.kubernetes.io/name=axiom-server,pod-template-hash=${current_hash}" \
+      --timeout=120s >/dev/null
 
     pod_name=$(
       kubectl -n "${NAMESPACE}" get pods \
-        -l app.kubernetes.io/name=axiom-server \
+        -l "app.kubernetes.io/name=axiom-server,pod-template-hash=${current_hash}" \
         --field-selector=status.phase=Running \
         --sort-by=.metadata.creationTimestamp \
         -o jsonpath='{.items[-1:].metadata.name}'
