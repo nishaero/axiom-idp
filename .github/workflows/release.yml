@@ -128,14 +128,14 @@ jobs:
       - name: Sign release tarball
         run: |
           cosign sign-blob --yes /tmp/dist/axiom-server-${{ matrix.os }}-${{ matrix.arch }}.tar.gz \
-            --output-signature /tmp/dist/axiom-server-${{ matrix.os }}-${{ matrix.arch }}.tar.gz.sig \
-            --output-certificate /tmp/dist/axiom-server-${{ matrix.os }}-${{ matrix.arch }}.tar.gz.pem
+            --bundle /tmp/dist/axiom-server-${{ matrix.os }}-${{ matrix.arch }}.tar.gz.bundle
 
       - name: Verify release tarball signature
         run: |
           cosign verify-blob /tmp/dist/axiom-server-${{ matrix.os }}-${{ matrix.arch }}.tar.gz \
-            --signature /tmp/dist/axiom-server-${{ matrix.os }}-${{ matrix.arch }}.tar.gz.sig \
-            --certificate /tmp/dist/axiom-server-${{ matrix.os }}-${{ matrix.arch }}.tar.gz.pem
+            --bundle /tmp/dist/axiom-server-${{ matrix.os }}-${{ matrix.arch }}.tar.gz.bundle \
+            --certificate-identity-regexp "^https://github.com/${{ github.repository }}/.github/workflows/release.yml@refs/tags/${{ env.RELEASE_TAG }}$" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
       - name: Upload release artifact
         uses: actions/upload-artifact@v4
@@ -143,8 +143,7 @@ jobs:
           name: axiom-server-${{ matrix.os }}-${{ matrix.arch }}
           path: |
             /tmp/dist/axiom-server-${{ matrix.os }}-${{ matrix.arch }}.tar.gz
-            /tmp/dist/axiom-server-${{ matrix.os }}-${{ matrix.arch }}.tar.gz.sig
-            /tmp/dist/axiom-server-${{ matrix.os }}-${{ matrix.arch }}.tar.gz.pem
+            /tmp/dist/axiom-server-${{ matrix.os }}-${{ matrix.arch }}.tar.gz.bundle
           retention-days: 14
 
   docker-build:
