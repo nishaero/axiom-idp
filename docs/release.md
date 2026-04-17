@@ -29,7 +29,7 @@ After merge to `main`, the release gate requires:
 - `Image Publish Validation`
 - `Deploy Validation`
 
-When that full set succeeds for the same merged commit SHA on `main`, `Auto Tag Release` creates the next patch semver tag automatically. The `Release` workflow then runs from that tag.
+When that full set succeeds for the same merged commit SHA on `main`, `Auto Tag Release` creates the next patch semver tag automatically and dispatches the `Release` workflow for that tag so release automation does not depend on recursive workflow triggers.
 
 ## Published Artifacts
 
