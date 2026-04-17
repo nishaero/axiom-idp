@@ -13,7 +13,7 @@ on:
 
 permissions:
   contents: write
-  actions: read
+  actions: write
 
 concurrency:
   group: auto-tag-${{ github.event.workflow_run.head_sha }}
@@ -137,3 +137,10 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -a "${TAG_NAME}" "${TARGET_SHA}" -m "Release ${TAG_NAME}"
           git push origin "${TAG_NAME}"
+
+      - name: Dispatch release workflow for new tag
+        if: steps.gate.outputs.ready == 'true' && steps.gate.outputs.existing_tag == ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ steps.version.outputs.next_tag }}
+        run: gh workflow run release.yml --ref main -f tag_name="${TAG_NAME}"

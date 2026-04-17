@@ -12,6 +12,8 @@ Axiom uses a GitHub-native release chain:
 4. GitHub release creation
 5. GHCR publication with signing, SBOMs, and attestations
 
+Release notes are generated from GitHub's release-note engine and categorized through [.github/release.yml](/home/nishaero/ai-workspace/axiom-idp-release-hardening/.github/release.yml) so each published release includes grouped pull requests, contributors, and a full changelog link.
+
 ## Required Workflow Sequence
 
 Pull requests must pass:
@@ -29,7 +31,7 @@ After merge to `main`, the release gate requires:
 - `Image Publish Validation`
 - `Deploy Validation`
 
-When that full set succeeds for the same merged commit SHA on `main`, `Auto Tag Release` creates the next patch semver tag automatically. The `Release` workflow then runs from that tag.
+When that full set succeeds for the same merged commit SHA on `main`, `Auto Tag Release` creates the next patch semver tag automatically and dispatches the `Release` workflow for that tag so release automation does not depend on recursive workflow triggers.
 
 ## Published Artifacts
 
