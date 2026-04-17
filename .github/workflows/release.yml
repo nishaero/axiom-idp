@@ -134,7 +134,7 @@ jobs:
         run: |
           cosign verify-blob /tmp/dist/axiom-server-${{ matrix.os }}-${{ matrix.arch }}.tar.gz \
             --bundle /tmp/dist/axiom-server-${{ matrix.os }}-${{ matrix.arch }}.tar.gz.bundle \
-            --certificate-identity-regexp "^https://github.com/${{ github.repository }}/.github/workflows/release.yml@refs/tags/${{ env.RELEASE_TAG }}$" \
+            --certificate-identity-regexp "^https://github.com/${{ github.repository }}/.github/workflows/release.yml@(refs/tags/${{ env.RELEASE_TAG }}|refs/heads/main)$" \
             --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
       - name: Upload release artifact
@@ -231,7 +231,7 @@ jobs:
         run: |
           cosign verify ${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }} \
             --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-            --certificate-identity-regexp "^https://github.com/${{ github.repository }}/.github/workflows/release.yml@refs/tags/${{ env.RELEASE_TAG }}$"
+            --certificate-identity-regexp "^https://github.com/${{ github.repository }}/.github/workflows/release.yml@(refs/tags/${{ env.RELEASE_TAG }}|refs/heads/main)$"
 
       - name: Verify image attestation
         env:
