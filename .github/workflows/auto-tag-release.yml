@@ -24,7 +24,6 @@ jobs:
   tag:
     name: Create Semver Tag
     if: >-
-      github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_branch == 'main' &&
       github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
@@ -61,7 +60,7 @@ jobs:
               if (!run || !run.name) {
                 continue;
               }
-              if (run.event !== "push") {
+              if (run.head_branch !== "main") {
                 continue;
               }
               const existing = latestByName.get(run.name);

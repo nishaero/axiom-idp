@@ -39,9 +39,9 @@ docker compose up -d --build
 
 | Service | URL | Status |
 |---------|-----|--------|
-| Frontend | http://localhost:8080 | Running |
-| Health Check | http://localhost:8080/health | Running |
-| API | http://localhost:8080/api/v1 | Running |
+| Frontend | http://localhost:8080 | Docker Compose maps host `8080` to container `8081` |
+| Health Check | http://localhost:8080/health | Exposed through the same host mapping |
+| API | http://localhost:8080/api/v1 | Exposed through the same host mapping |
 
 ## Kubernetes Deployment
 
@@ -99,6 +99,14 @@ The bootstrap script assumes the following checks exist in GitHub Actions:
 - `Dependency Vulnerability Check`
 - `License Compliance Check`
 
+Release automation then extends that baseline with:
+- `Code Quality Gate`
+- `Dependency Review`
+- `Image Publish Validation`
+- `Deploy Validation`
+- `Auto Tag Release`
+- `Release`
+
 ## Environment Variables
 
 | Variable | Description | Default |
@@ -108,7 +116,7 @@ The bootstrap script assumes the following checks exist in GitHub Actions:
 | AXIOM_ENV | Environment (development/production) | development |
 | AXIOM_LOG_LEVEL | Log level (debug/info/warn/error) | info |
 | AXIOM_DB_DRIVER | Runtime state driver (`sqlite3` for local runs, `postgres` for shared HA state) | sqlite3 |
-| AXIOM_DB_URL | Runtime state connection string (`file:axiom.db` locally, `postgres://...` in production) | file:axiom.db |
+| AXIOM_DB_URL | Runtime state connection string (`file:axiom.db` locally, shared PostgreSQL DSN in production) | file:axiom.db |
 | AXIOM_SESSION_SECRET | Session secret (change in production) | REPLACE_WITH_A_LONG_RANDOM_SECRET |
 | AXIOM_AI_BACKEND | AI mode (`local`, `ollama`, or `openai`) | local |
 | AXIOM_AI_BASE_URL | OpenAI-compatible base URL | http://127.0.0.1:11434 |
@@ -136,8 +144,25 @@ For production, you should:
 5. Set up proper RBAC and authentication
 6. Use resource limits
 7. Enable audit logging
-8. Pull images from GitHub Container Registry (`ghcr.io/axiom-idp/axiom`)
+8. Pull images from GitHub Container Registry (`ghcr.io/nishaero/axiom-idp`)
 
 Note: async deployment and infrastructure jobs are currently handled by the running process, so job state is not shared across replicas yet.
 
 See `docs/` for more information.
+
+## Release Artifacts
+
+GitHub releases publish:
+
+- signed server tarballs such as `axiom-server-linux-amd64.tar.gz`
+- matching `*.sig` and `*.pem` files for cosign blob verification
+- a signed multi-arch GHCR image at `ghcr.io/nishaero/axiom-idp`
+- image SBOM and provenance attestations
+
+Verify the container image after a release:
+
+```bash
+cosign verify ghcr.io/nishaero/axiom-idp:v1.0.0 \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity-regexp '^https://github.com/nishaero/axiom-idp/.github/workflows/release.yml@refs/tags/v1.0.0$'
+```

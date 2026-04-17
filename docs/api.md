@@ -1,6 +1,6 @@
 # Axiom IDP API Reference
 
-This page documents the release-facing HTTP surface that is implemented in the current branch.
+This page documents the release-facing HTTP surface implemented in the current repository state.
 
 ## Authentication
 

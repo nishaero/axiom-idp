@@ -60,10 +60,11 @@ Axiom is an AI-native internal developer platform focused on release readiness, 
 #### Option 1: From GitHub Release (Recommended)
 
 ```bash
-# Download latest release
-curl -L https://github.com/nishaero/axiom-idp/releases/latest/download/axiom-linux-amd64 -o axiom
-chmod +x axiom
-sudo mv axiom /usr/local/bin/
+# Download and unpack the latest Linux amd64 release
+curl -L https://github.com/nishaero/axiom-idp/releases/latest/download/axiom-server-linux-amd64.tar.gz -o axiom-server-linux-amd64.tar.gz
+tar -xzf axiom-server-linux-amd64.tar.gz
+chmod +x axiom-server-linux-amd64
+sudo mv axiom-server-linux-amd64 /usr/local/bin/axiom-server
 ```
 
 #### Option 2: Build from Source
@@ -119,7 +120,7 @@ AXIOM_AI_BACKEND=ollama AXIOM_AI_BASE_URL=http://host.docker.internal:11434 dock
 # AXIOM_AI_BACKEND=openai AXIOM_AI_API_KEY=replace-with-a-real-key AXIOM_AI_BASE_URL=https://api.example.com/v1 docker compose up -d --build
 ```
 
-Visit `http://localhost:8080` in your browser.
+Visit `http://localhost:8080` in your browser. The container serves the application on port `8081`; Docker Compose maps that to host port `8080`.
 
 ### Runtime Status Endpoints
 
@@ -206,6 +207,8 @@ axiom-idp/
 - [API Reference](docs/api.md)
 - [Platform Readiness Assessment](docs/platform-readiness-assessment.md)
 - [Market Research and Differentiation](docs/market-research.md)
+- [Release Guide](docs/release.md)
+- [Workflow Guide](docs/workflows.md)
 - [Security Best Practices](SECURITY.md)
 - [Contributing Guide](CONTRIBUTING.md)
 - [Deployment Guide](DEPLOYMENT.md)
@@ -217,9 +220,11 @@ axiom-idp/
 
 Axiom uses GitHub-native release automation:
 
-- Pull requests must pass `CI`, `Code Quality Gate`, `Security Scan`, and `Dependency Review`
-- release workflow triggers only on semantic version tags like `v1.2.3`
-- images are published to `ghcr.io`
+- pull requests must pass `CI`, `Code Quality Gate`, `Security Scan`, and `Dependency Review`
+- the merged `main` commit must also pass `Image Publish Validation` and `Deploy Validation`
+- `Auto Tag Release` creates the next patch semver tag automatically after the full required workflow set succeeds for the merged `main` commit
+- the `Release` workflow triggers only from semantic version tags like `v1.2.3`
+- images are published to `ghcr.io/${owner}/${repo}`, for example `ghcr.io/nishaero/axiom-idp`
 - release and validation images are signed with keyless Sigstore cosign
 - SPDX SBOMs are generated during publish flows
 - build provenance is attested through GitHub artifact attestations
@@ -376,7 +381,7 @@ kubectl apply -f deployments/k8s-deployment.yaml
 
 ### GitHub Container Registry
 
-Release images are published to `ghcr.io/axiom-idp/axiom` and the GitHub release pipeline pushes hardened container builds there.
+Release images are published to `ghcr.io/nishaero/axiom-idp` and the GitHub release pipeline pushes hardened container builds there.
 
 ### Systemd Service
 

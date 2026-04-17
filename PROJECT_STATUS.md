@@ -1,13 +1,13 @@
 # Axiom IDP - Project Status
 
-Updated: 2026-04-15
-Branch: `feat/production-delivery-baseline`
+Updated: 2026-04-17
+Branch: `main`
 
 ## Executive Summary
 
-Axiom IDP is now in a working, validated launch-candidate state.
+Axiom IDP is in release-readiness hardening on `main`.
 
-The repository has been brought back into alignment with the intended product direction:
+The repository is aligned with the intended product direction:
 
 - AI-assisted release readiness and operational guidance
 - GitHub-native SDLC and delivery governance
@@ -27,7 +27,7 @@ Local validation completed:
 - `./scripts/validate-docker.sh`
 - `./scripts/validate-minikube.sh`
 
-GitHub validation on the current branch completed successfully:
+GitHub validation has been completed for the merged delivery changes and is now being tightened on `main` around automated release gating:
 
 - `CI`
 - `Code Quality Gate`
@@ -60,9 +60,9 @@ Frontend:
 
 GitHub and release automation:
 
-- CI, quality, security, dependency review, deploy validation
+- CI, quality, security, dependency review, image validation, and deploy validation
 - issue triage, stale handling, label synchronization
-- semver-tagged release workflow
+- automatic semver tagging after a fully successful merged-commit workflow set
 - GHCR image publication
 - signed images, SBOM generation, and provenance attestation in release/publish workflows
 
@@ -84,7 +84,7 @@ The goal is not to replicate generic portal products. The differentiator is the 
 
 ## Known Boundaries
 
-The branch is ready for controlled launch, but these items are still outside the current validated baseline:
+The repository is close to launch, but these items are still outside the current validated baseline:
 
 - formal BSI C5 certification
 - full HA architecture with externalized state for every runtime subsystem
@@ -95,10 +95,10 @@ The branch is ready for controlled launch, but these items are still outside the
 
 ## Next Recommended Step
 
-Move from branch validation to release:
+Move from merged-main validation to the first automated release:
 
-1. merge the branch
-2. create a semantic version tag such as `v1.0.0`
-3. verify signed GHCR artifacts and attestations
+1. complete the remaining green `main` workflow run set
+2. confirm `Auto Tag Release` creates the first semantic version tag
+3. verify the generated GitHub release assets, signed GHCR image, SBOM, and attestations
 4. deploy with production secrets and backing services
-5. complete the post-merge launch checklist
+5. complete the post-release launch checklist

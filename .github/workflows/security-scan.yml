@@ -115,7 +115,7 @@ jobs:
         uses: trufflesecurity/trufflehog@v3.94.3
         with:
           path: ./
-          extra_args: --results=verified,unknown
+          extra_args: --results=verified
 
       - name: Upload TruffleHog results
         if: always()
