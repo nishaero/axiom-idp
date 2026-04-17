@@ -26,7 +26,6 @@ After merge to `main`, the release gate requires:
 - `CI`
 - `Code Quality Gate`
 - `Security Scan`
-- `Dependency Review`
 - `Image Publish Validation`
 - `Deploy Validation`
 

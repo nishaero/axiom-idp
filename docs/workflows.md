@@ -17,7 +17,7 @@ This repository keeps the SDLC, release, and governance path in GitHub.
 
 - `Image Publish Validation` builds and validates the container image path used for releases.
 - `Deploy Validation` validates the GitOps and Minikube deployment path for merged `main` commits.
-- `Auto Tag Release` watches the full merged-commit workflow set and creates the next patch semver tag when every required workflow succeeds for the same `main` SHA.
+- `Auto Tag Release` watches the merged-commit workflow set on `main` and creates the next patch semver tag when `CI`, `Code Quality Gate`, `Security Scan`, `Image Publish Validation`, and `Deploy Validation` all succeed for the same `main` SHA.
 - `Release` runs from semantic version tags and publishes signed artifacts, signed GHCR images, SBOMs, and provenance attestations.
 
 ## Governance Workflows
