@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tf-apply-browser-smoke-lab-config
+  namespace: axiom-infra-jobs
+data:
+  main.tf: |
+    terraform {
+      required_version = ">= 1.6.0"
+      required_providers {
+        kubernetes = {
+          source  = "hashicorp/kubernetes"
+          version = "~> 2.31"
+        }
+      }
+    }
+    provider "kubernetes" {
+      host                   = "https://kubernetes.default.svc"
+      token                  = file("/var/run/secrets/kubernetes.io/serviceaccount/token")
+      cluster_ca_certificate = file("/var/run/secrets/kubernetes.io/serviceaccount/ca.crt")
+    }
+    resource "kubernetes_config_map" "footprint" {
+      metadata {
+        name      = "terraform-footprint"
+        namespace = "browser-smoke-lab"
+      }
+      data = {
+        request = "browser-smoke-lab"
+        provider = "terraform"
+      }
+    }
+    resource "kubernetes_resource_quota_v1" "guardrails" {
+      metadata {
+        name      = "terraform-guardrails"
+        namespace = "browser-smoke-lab"
+      }
+      spec {
+        hard = {
+          "pods" = "10"
+          "services" = "5"
+        }
+      }
+    }
