@@ -1,0 +1,10 @@
+apiVersion: platform.axiom.dev/v1alpha1
+kind: Bbx-CrossplaneClaim
+metadata:
+  name: bbx-crossplane
+  namespace: bbx-crossplane
+spec:
+  targetNamespace: bbx-crossplane
+  provider: crossplane
+  parameters:
+    {}
