@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: browser-smoke
+  namespace: axiom-apps
+  labels:
+    app.kubernetes.io/name: browser-smoke
+    app.kubernetes.io/managed-by: axiom-idp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: browser-smoke
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: browser-smoke
+        app.kubernetes.io/managed-by: axiom-idp
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: browser-smoke
+          image: nginx:1.27-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+          securityContext:
+            allowPrivilegeEscalation: false
+            seccompProfile:
+              type: RuntimeDefault

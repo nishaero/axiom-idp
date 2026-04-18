@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: browser-smoke
+  namespace: axiom-apps
+  labels:
+    app.kubernetes.io/name: browser-smoke
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: browser-smoke
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
