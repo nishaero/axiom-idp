@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: hello-world
+  namespace: axiom-apps
+  labels:
+    app.kubernetes.io/name: hello-world
+spec:
+  type: NodePort
+  selector:
+    app.kubernetes.io/name: hello-world
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
