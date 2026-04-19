@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stable-job-check
+  namespace: axiom-apps
+  labels:
+    app.kubernetes.io/name: stable-job-check
+    app.kubernetes.io/managed-by: axiom-idp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: stable-job-check
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: stable-job-check
+        app.kubernetes.io/managed-by: axiom-idp
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: stable-job-check
+          image: nginx:1.27-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+          securityContext:
+            allowPrivilegeEscalation: false
+            seccompProfile:
+              type: RuntimeDefault
